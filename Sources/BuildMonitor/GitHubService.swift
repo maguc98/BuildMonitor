@@ -55,6 +55,7 @@ struct WorkflowRun: Decodable, Identifiable, Hashable {
     let conclusion: String?
     let htmlURL: String
     let createdAt: String
+    let runStartedAt: String?
     let updatedAt: String
     enum CodingKeys: String, CodingKey {
         case id, name, status, conclusion
