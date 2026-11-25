@@ -397,7 +397,8 @@ private struct SummaryTile: View {
 private struct RepositoryCard: View {
     let repository: GitHubRepository
     let run: WorkflowRun?
-    let activeRuns: [WorkflowRun]    let displayName: String
+    let activeRuns: [WorkflowRun]
+    let displayName: String
     let note: String
     private var tint: Color {
         let palette: [Color] = [Palette.blue, Palette.purple, Palette.success, .pink, .cyan, .orange]
