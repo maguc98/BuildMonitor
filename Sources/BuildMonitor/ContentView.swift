@@ -446,82 +446,131 @@ private struct RepositoryCard: View {
 
     private var cardBody: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 11) {
-                Text(String(displayName.prefix(1)).uppercased())
-                    .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(.white)
-                    .frame(width: 42, height: 42)
-                    .background(LinearGradient(colors: [tint.opacity(0.72), tint], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 13))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(displayName).font(.system(size: 16, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink).lineLimit(1)
-                    HStack(spacing: 5) {
-                        Text(repository.fullName)
-                        if repository.isPrivate { Image(systemName: "lock.fill") }
-                    }.font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary).lineLimit(1)
-                    if !note.isEmpty {
-                        Text(note)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Palette.secondary)
-                            .lineLimit(2)
-                    }
-                }
-                Spacer(minLength: 2)
-                if let run { StatusPill(status: run.buildStatus) }
-                else {
-                    Text("暂无记录").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.secondary)
-                        .padding(.horizontal, 9).padding(.vertical, 7).background(Palette.line.opacity(0.25), in: Capsule())
-                }
-            }
-            HStack {
-                Text(run?.title ?? "尚未发现 Actions 运行记录").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.ink).lineLimit(1)
-                Spacer()
-                if let run { Text("#\(run.runNumber)").font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary) }
-            }
-            if let run, run.status == "in_progress" {
-                ProgressView().tint(Palette.blue)
-            } else {
-                HStack {
-                    if let run { Text("\(run.headBranch) · \(run.shortSHA)") }
-                    else { Text("默认分支：\(repository.defaultBranch)") }
-                    Spacer()
-                    Text(run.map { RelativeDateTimeFormatter.localized($0.updatedAt) } ?? RelativeDateTimeFormatter.localized(repository.updatedAt))
-                }
-                .font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
-            }
+            repositoryHeader
+            latestRunHeader
+            runMetadata
             if activeRuns.count > 1 {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 6) {
-                        StatusGlyph(status: .inProgress, size: 11)
-                        Text("\(activeRuns.count) 个构建正在运行")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Palette.blue)
-                    }
-                    ForEach(activeRuns) { activeRun in
-                        HStack(spacing: 8) {
-                            StatusGlyph(status: activeRun.buildStatus, size: 9)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(activeRun.title)
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundStyle(Palette.ink)
-                                    .lineLimit(1)
-                                Text("#\(activeRun.runNumber) · \(activeRun.headBranch) · \(activeRun.shortSHA)")
-                                    .font(.system(size: 9, weight: .medium))
-                                    .foregroundStyle(Palette.secondary)
-                                    .lineLimit(1)
-                            }
-                            Spacer(minLength: 2)
-                            Text(activeRun.status == "in_progress" ? "运行中" : "排队中")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundStyle(activeRun.status == "in_progress" ? Palette.blue : Palette.orange)
-                        }
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 7)
-                        .background(Color.white.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
-                    }
-                }
+                activeRunsSection
             }
         }
-        .padding(14).glassCard(21)
+        .padding(14)
+        .glassCard(21)
     }
+
+    private var repositoryHeader: some View {
+        HStack(spacing: 11) {
+            Text(String(displayName.prefix(1)).uppercased())
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .frame(width: 42, height: 42)
+                .background(
+                    LinearGradient(colors: [tint.opacity(0.72), tint], startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: 13)
+                )
+            VStack(alignment: .leading, spacing: 3) {
+                Text(displayName)
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(Palette.ink)
+                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    Text(repository.fullName)
+                    if repository.isPrivate { Image(systemName: "lock.fill") }
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Palette.secondary)
+                .lineLimit(1)
+                if !note.isEmpty {
+                    Text(note)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Palette.secondary)
+                        .lineLimit(2)
+                }
+            }
+            Spacer(minLength: 2)
+            if let run {
+                StatusPill(status: run.buildStatus)
+            } else {
+                Text("暂无记录")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Palette.secondary)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 7)
+                    .background(Palette.line.opacity(0.25), in: Capsule())
+            }
+        }
+    }
+
+    private var latestRunHeader: some View {
+        HStack {
+            Text(run?.title ?? "尚未发现 Actions 运行记录")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Palette.ink)
+                .lineLimit(1)
+            Spacer()
+            if let run {
+                Text("#\\(run.runNumber)")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Palette.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var runMetadata: some View {
+        if let run, run.status == "in_progress" {
+            ProgressView().tint(Palette.blue)
+        } else {
+            HStack {
+                if let run {
+                    Text("\\(run.headBranch) · \\(run.shortSHA)")
+                } else {
+                    Text("默认分支：\\(repository.defaultBranch)")
+                }
+                Spacer()
+                Text(run.map { RelativeDateTimeFormatter.localized($0.updatedAt) } ?? RelativeDateTimeFormatter.localized(repository.updatedAt))
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(Palette.secondary)
+        }
+    }
+
+    private var activeRunsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                StatusGlyph(status: .inProgress, size: 11)
+                Text("\\(activeRuns.count) 个构建正在运行")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Palette.blue)
+            }
+            ForEach(activeRuns) { activeRun in
+                activeRunRow(activeRun)
+            }
+        }
+    }
+
+    private func activeRunRow(_ activeRun: WorkflowRun) -> some View {
+        HStack(spacing: 8) {
+            StatusGlyph(status: activeRun.buildStatus, size: 9)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(activeRun.title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Palette.ink)
+                    .lineLimit(1)
+                Text("#\\(activeRun.runNumber) · \\(activeRun.headBranch) · \\(activeRun.shortSHA)")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(Palette.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 2)
+            Text(activeRun.status == "in_progress" ? "运行中" : "排队中")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(activeRun.status == "in_progress" ? Palette.blue : Palette.orange)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .background(Color.white.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+    }
+
 }
 
 
@@ -548,83 +597,7 @@ private struct WorkflowLaunchSheet: View {
         NavigationStack {
             ZStack {
                 AppBackground()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(repository.fullName)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(Palette.ink)
-                            Text("选择要手动启动的 GitHub Actions 工作流。")
-                                .font(.system(size: 11))
-                                .foregroundStyle(Palette.secondary)
-                        }
-                        VStack(alignment: .leading, spacing: 7) {
-                            Text("目标分支")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Palette.ink)
-                            TextField("例如 main", text: $branch)
-                                .font(.system(size: 13, weight: .medium))
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                .padding(12)
-                                .background(Color.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 13))
-                        }
-                        if let errorMessage {
-                            InfoNotice(text: errorMessage)
-                        }
-                        if isLoading {
-                            HStack(spacing: 9) {
-                                ProgressView().tint(Palette.blue)
-                                Text("正在读取工作流…")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(Palette.secondary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 20)
-                        } else if activeWorkflows.isEmpty {
-                            ContentUnavailableView(
-                                "没有可用的工作流",
-                                systemImage: "workflow",
-                                description: Text("请确认仓库中存在已启用的 GitHub Actions 工作流。")
-                            )
-                        } else {
-                            ForEach(activeWorkflows) { workflow in
-                                Button {
-                                    Task { await launch(workflow) }
-                                } label: {
-                                    HStack(spacing: 11) {
-                                        Image(systemName: launchingWorkflowID == workflow.id ? "hourglass" : "play.circle.fill")
-                                            .font(.system(size: 23, weight: .semibold))
-                                            .foregroundStyle(Palette.blue)
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text(workflow.name)
-                                                .font(.system(size: 13, weight: .semibold))
-                                                .foregroundStyle(Palette.ink)
-                                            Text(workflow.path)
-                                                .font(.system(size: 10, weight: .medium))
-                                                .foregroundStyle(Palette.secondary)
-                                                .lineLimit(1)
-                                        }
-                                        Spacer()
-                                        if launchingWorkflowID == workflow.id {
-                                            ProgressView().tint(Palette.blue)
-                                        } else {
-                                            Image(systemName: "chevron.right")
-                                                .font(.system(size: 11, weight: .semibold))
-                                                .foregroundStyle(Palette.secondary)
-                                        }
-                                    }
-                                    .padding(13)
-                                    .glassCard(16)
-                                }
-                                .disabled(launchingWorkflowID != nil || branch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                                .buttonStyle(AppPressableButtonStyle())
-                            }
-                        }
-                        InfoNotice(text: "启动要求该工作流支持 workflow_dispatch，且 GitHub Token 具有 Actions 写入权限。文字状态保持静止，动画只用于状态图标。")
-                    }
-                    .padding(18)
-                }
+                ScrollView { sheetContent }
             }
             .navigationTitle("启动构建")
             .navigationBarTitleDisplayMode(.inline)
@@ -635,6 +608,99 @@ private struct WorkflowLaunchSheet: View {
             }
             .task { await loadWorkflows() }
         }
+    }
+
+    private var sheetContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            repositoryIntro
+            branchInput
+            if let errorMessage { InfoNotice(text: errorMessage) }
+            workflowChoices
+            InfoNotice(text: "启动要求该工作流支持 workflow_dispatch，且 GitHub Token 具有 Actions 写入权限。")
+        }
+        .padding(18)
+    }
+
+    private var repositoryIntro: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(repository.fullName)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Palette.ink)
+            Text("选择要手动启动的 GitHub Actions 工作流。")
+                .font(.system(size: 11))
+                .foregroundStyle(Palette.secondary)
+        }
+    }
+
+    private var branchInput: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("目标分支")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Palette.ink)
+            TextField("例如 main", text: $branch)
+                .font(.system(size: 13, weight: .medium))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(12)
+                .background(Color.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 13))
+        }
+    }
+
+    @ViewBuilder
+    private var workflowChoices: some View {
+        if isLoading {
+            HStack(spacing: 9) {
+                ProgressView().tint(Palette.blue)
+                Text("正在读取工作流…")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Palette.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+        } else if activeWorkflows.isEmpty {
+            ContentUnavailableView(
+                "没有可用的工作流",
+                systemImage: "point.3.connected.trianglepath.dotted",
+                description: Text("请确认仓库中存在已启用的 GitHub Actions 工作流。")
+            )
+        } else {
+            ForEach(activeWorkflows) { workflow in
+                workflowRow(workflow)
+            }
+        }
+    }
+
+    private func workflowRow(_ workflow: WorkflowDefinition) -> some View {
+        Button {
+            Task { await launch(workflow) }
+        } label: {
+            HStack(spacing: 11) {
+                Image(systemName: launchingWorkflowID == workflow.id ? "hourglass" : "play.circle.fill")
+                    .font(.system(size: 23, weight: .semibold))
+                    .foregroundStyle(Palette.blue)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(workflow.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Palette.ink)
+                    Text(workflow.path)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Palette.secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                if launchingWorkflowID == workflow.id {
+                    ProgressView().tint(Palette.blue)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Palette.secondary)
+                }
+            }
+            .padding(13)
+            .glassCard(16)
+        }
+        .disabled(launchingWorkflowID != nil || branch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        .buttonStyle(AppPressableButtonStyle())
     }
 
     private func loadWorkflows() async {
