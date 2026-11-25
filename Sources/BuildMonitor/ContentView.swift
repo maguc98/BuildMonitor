@@ -991,6 +991,21 @@ struct RepositoryManagementView: View {
         }
         .padding(12)
         .glassCard(18)
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .contextMenu {
+            Button {
+                editingRepository = repository
+            } label: {
+                Label("编辑名称和备注", systemImage: "pencil")
+            }
+            Button(role: .destructive) {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                    store.setRepositoryHidden(repository, hidden: !showingHidden)
+                }
+            } label: {
+                Label(showingHidden ? "恢复显示仓库" : "隐藏仓库", systemImage: showingHidden ? "eye" : "eye.slash")
+            }
+        }
     }
 }
 
