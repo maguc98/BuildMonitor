@@ -294,7 +294,7 @@ final class BuildMonitorStore: ObservableObject {
     @Published private(set) var hiddenRunIDs: Set<String> = UserDefaults.standard.stringArray(forKey: "BuildMonitor.hiddenRuns")?.reduce(into: Set<String>()) { $0.insert($1) } ?? []
     @Published private(set) var hiddenRepositoryIDs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "BuildMonitor.hiddenRepositories") ?? [])
     @Published private(set) var repositoryDisplayNames: [String: String] = UserDefaults.standard.dictionary(forKey: "BuildMonitor.repositoryDisplayNames") as? [String: String] ?? [:]
-    @Published private(set) var repositoryNotes: [String: String] = UserDefaults.standard.dictionary(forKey: "BuildMonitor.repositoryNotes") as? [String: String] ?? []
+    @Published private(set) var repositoryNotes: [String: String] = UserDefaults.standard.dictionary(forKey: "BuildMonitor.repositoryNotes") as? [String: String] ?? [:]
 
     private let api = GitHubAPIClient()
     private var token: String?
