@@ -129,22 +129,32 @@ struct AppMark: View {
 struct BuildElapsedTimer: View {
     let createdAt: String
     let updatedAt: String
+    let runStartedAt: String?
     let status: String
     let label: String
     private var startDate: Date { WorkflowRun.parseDate(createdAt) ?? Date() }
     private var finishDate: Date { WorkflowRun.parseDate(updatedAt) ?? Date() }
+    private var queueDuration: TimeInterval { max(0, (WorkflowRun.parseDate(runStartedAt ?? "") ?? finishDate).timeIntervalSince(startDate)) }
     private var active: Bool { ["queued", "waiting", "requested", "pending", "in_progress"].contains(status) }
     var body: some View {
-        if active { TimelineView(.periodic(from: .now, by: 1)) { ctx in labelText(max(0, ctx.date.timeIntervalSince(startDate))) } }
-        else { labelText(max(0, finishDate.timeIntervalSince(startDate))) }
+        if active { TimelineView(.periodic(from: .now, by: 1)) { ctx in timerRows(now: ctx.date) } }
+        else { timerRows(now: finishDate) }
     }
-    private func labelText(_ t: TimeInterval) -> some View {
+    private func timerRows(now: Date) -> some View {
+        let total = max(0, now.timeIntervalSince(startDate))
+        let queue = status == "queued" || status == "waiting" || status == "requested" || status == "pending" ? total : queueDuration
+        return VStack(alignment: .leading, spacing: 3) {
+            timerRow("排队", queue, tint: Palette.purple, icon: "hourglass")
+            timerRow(status == "in_progress" ? "总构建耗时" : "总耗时", total, tint: Palette.blue, icon: "timer")
+        }
+    }
+    private func timerRow(_ title: String, _ t: TimeInterval, tint: Color, icon: String) -> some View {
         let n = max(0, Int(t)); let h = n / 3600; let m = (n % 3600) / 60; let s = n % 60
         return HStack(spacing: 4) {
-            Image(systemName: status == "queued" ? "hourglass" : "timer")
-            Text(label)
+            Image(systemName: icon)
+            Text(title)
             Text(h > 0 ? String(format: "%02d:%02d:%02d", h, m, s) : String(format: "%02d:%02d", m, s)).monospacedDigit().fontWeight(.semibold)
-        }.font(.system(size: 10, weight: .medium)).foregroundStyle(status == "queued" ? Palette.purple : Palette.blue)
+        }.font(.system(size: 10, weight: .medium)).foregroundStyle(tint)
     }
 }
 
@@ -557,7 +567,7 @@ private struct RepositoryCard: View {
                     Spacer()
                     Text(RelativeDateTimeFormatter.localized(run.updatedAt))
                 }.font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
-                BuildElapsedTimer(createdAt: run.createdAt, updatedAt: run.updatedAt, status: run.status, label: run.status == "queued" || run.status == "waiting" || run.status == "requested" || run.status == "pending" ? "排队时间" : (run.status == "in_progress" ? "总构建耗时" : "最终耗时"))
+                BuildElapsedTimer(createdAt: run.createdAt, updatedAt: run.updatedAt, runStartedAt: run.runStartedAt, status: run.status, label: run.status == "queued" || run.status == "waiting" || run.status == "requested" || run.status == "pending" ? "排队时间" : (run.status == "in_progress" ? "总构建耗时" : "最终耗时"))
             } else {
                 Text("默认分支：\(repository.defaultBranch)").font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
             }
