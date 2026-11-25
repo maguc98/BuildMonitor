@@ -223,6 +223,7 @@ struct DashboardView: View {
                                     RepositoryCard(
                                         repository: repository,
                                         run: store.latestRun(for: repository.fullName),
+                                        activeRuns: store.activeRuns(for: repository.fullName),
                                         displayName: store.displayName(for: repository),
                                         note: store.note(for: repository)
                                     )
@@ -314,6 +315,7 @@ private struct SummaryTile: View {
 private struct RepositoryCard: View {
     let repository: GitHubRepository
     let run: WorkflowRun?
+    let activeRuns: [WorkflowRun]
     let displayName: String
     let note: String
     private var tint: Color {
@@ -373,7 +375,6 @@ private struct RepositoryCard: View {
                 }
                 .font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
             }
-            let activeRuns = BuildMonitorStore.shared.activeRuns(for: repository.fullName)
             if activeRuns.count > 1 {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
