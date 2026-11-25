@@ -292,11 +292,22 @@ final class BuildMonitorStore: ObservableObject {
     @Published var errorMessage: String?
     @Published private(set) var lastRefreshed: Date?
     @Published private(set) var hiddenRunIDs: Set<String> = UserDefaults.standard.stringArray(forKey: "BuildMonitor.hiddenRuns")?.reduce(into: Set<String>()) { $0.insert($1) } ?? []
+    @Published private(set) var hiddenRepositoryIDs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "BuildMonitor.hiddenRepositories") ?? [])
+    @Published private(set) var repositoryDisplayNames: [String: String] = UserDefaults.standard.dictionary(forKey: "BuildMonitor.repositoryDisplayNames") as? [String: String] ?? [:]
+    @Published private(set) var repositoryNotes: [String: String] = UserDefaults.standard.dictionary(forKey: "BuildMonitor.repositoryNotes") as? [String: String] ?? []
 
     private let api = GitHubAPIClient()
     private var token: String?
     private var pollingTask: Task<Void, Never>?
     var isConnected: Bool { token != nil }
+
+    var visibleRepositories: [GitHubRepository] {
+        repositories.filter { !hiddenRepositoryIDs.contains($0.fullName) }
+    }
+
+    var hiddenRepositories: [GitHubRepository] {
+        repositories.filter { hiddenRepositoryIDs.contains($0.fullName) }
+    }
 
     var allRecentRuns: [RepositoryRun] {
         repositories.flatMap { repository in
@@ -312,6 +323,42 @@ final class BuildMonitorStore: ObservableObject {
         runsByRepository[repository]?.first
     }
 
+    func displayName(for repository: GitHubRepository) -> String {
+        repositoryDisplayNames[repository.fullName] ?? repository.name
+    }
+
+    func note(for repository: GitHubRepository) -> String {
+        repositoryNotes[repository.fullName] ?? ""
+    }
+
+    func setRepositoryHidden(_ repository: GitHubRepository, hidden: Bool) {
+        if hidden {
+            hiddenRepositoryIDs.insert(repository.fullName)
+        } else {
+            hiddenRepositoryIDs.remove(repository.fullName)
+        }
+        UserDefaults.standard.set(Array(hiddenRepositoryIDs).sorted(), forKey: "BuildMonitor.hiddenRepositories")
+    }
+
+    func updateRepositoryMetadata(_ repository: GitHubRepository, displayName: String, note: String) {
+        let cleanedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if cleanedName.isEmpty || cleanedName == repository.name {
+            repositoryDisplayNames.removeValue(forKey: repository.fullName)
+        } else {
+            repositoryDisplayNames[repository.fullName] = cleanedName
+        }
+
+        if cleanedNote.isEmpty {
+            repositoryNotes.removeValue(forKey: repository.fullName)
+        } else {
+            repositoryNotes[repository.fullName] = cleanedNote
+        }
+
+        UserDefaults.standard.set(repositoryDisplayNames, forKey: "BuildMonitor.repositoryDisplayNames")
+        UserDefaults.standard.set(repositoryNotes, forKey: "BuildMonitor.repositoryNotes")
+    }
 
     func hideHistoryRecord(_ item: RepositoryRun) {
         hiddenRunIDs.insert(item.id)
