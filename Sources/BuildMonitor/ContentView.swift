@@ -3,28 +3,52 @@ import SwiftUI
 struct RootTabView: View {
     @StateObject private var store = BuildMonitorStore()
     @State private var selectedTab = 0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\\.scenePhase) private var scenePhase
+
+    private let tabTitles = ["项目", "历史", "通知", "设置"]
+    private let tabIcons = ["square.grid.2x2.fill", "clock", "bell", "gearshape"]
+
     var body: some View {
-        TabView(selection: $selectedTab) {
-            NavigationStack { DashboardView() }
-                .tabItem { Label("项目", systemImage: "square.grid.2x2.fill").symbolEffect(.bounce, value: selectedTab) }
-                .tag(0)
-            NavigationStack { HistoryView() }
-                .tabItem { Label("历史", systemImage: "clock").symbolEffect(.bounce, value: selectedTab) }
-                .tag(1)
-            NavigationStack { NotificationsView() }
-                .tabItem { Label("通知", systemImage: "bell").symbolEffect(.bounce, value: selectedTab) }
-                .tag(2)
-            NavigationStack { SettingsView() }
-                .tabItem { Label("设置", systemImage: "gearshape").symbolEffect(.bounce, value: selectedTab) }
-                .tag(3)
+        ZStack {
+            AppBackground()
+            ZStack {
+                NavigationStack { DashboardView() }
+                    .opacity(selectedTab == 0 ? 1 : 0)
+                    .offset(x: pageOffset(for: 0))
+                    .zIndex(selectedTab == 0 ? 1 : 0)
+                    .allowsHitTesting(selectedTab == 0)
+                    .accessibilityHidden(selectedTab != 0)
+
+                NavigationStack { HistoryView() }
+                    .opacity(selectedTab == 1 ? 1 : 0)
+                    .offset(x: pageOffset(for: 1))
+                    .zIndex(selectedTab == 1 ? 1 : 0)
+                    .allowsHitTesting(selectedTab == 1)
+                    .accessibilityHidden(selectedTab != 1)
+
+                NavigationStack { NotificationsView() }
+                    .opacity(selectedTab == 2 ? 1 : 0)
+                    .offset(x: pageOffset(for: 2))
+                    .zIndex(selectedTab == 2 ? 1 : 0)
+                    .allowsHitTesting(selectedTab == 2)
+                    .accessibilityHidden(selectedTab != 2)
+
+                NavigationStack { SettingsView() }
+                    .opacity(selectedTab == 3 ? 1 : 0)
+                    .offset(x: pageOffset(for: 3))
+                    .zIndex(selectedTab == 3 ? 1 : 0)
+                    .allowsHitTesting(selectedTab == 3)
+                    .accessibilityHidden(selectedTab != 3)
+            }
+            .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: selectedTab)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            tabBar
         }
         .buttonStyle(AppPressableButtonStyle())
         .sensoryFeedback(.selection, trigger: selectedTab)
         .tint(Palette.blue)
-        .toolbarBackground(.visible, for: .tabBar)
-        .toolbarBackground(.ultraThinMaterial, for: .tabBar)
         .environmentObject(store)
         .task {
             await store.restoreSession()
@@ -40,6 +64,43 @@ struct RootTabView: View {
                 store.stopPolling()
                 BackgroundRefreshScheduler.schedule()
             }
+        }
+    }
+
+    private func pageOffset(for index: Int) -> CGFloat {
+        guard selectedTab != index else { return 0 }
+        return index > selectedTab ? 18 : -18
+    }
+
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(0..<tabTitles.count, id: \\.self) { index in
+                Button {
+                    guard selectedTab != index else { return }
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86)) {
+                        selectedTab = index
+                    }
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: tabIcons[index])
+                            .font(.system(size: 19, weight: selectedTab == index ? .semibold : .regular))
+                            .symbolEffect(.bounce, value: selectedTab == index)
+                        Text(tabTitles[index])
+                            .font(.system(size: 10, weight: selectedTab == index ? .semibold : .medium))
+                    }
+                    .foregroundStyle(selectedTab == index ? Palette.blue : Palette.secondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 5)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Palette.line.opacity(0.3)).frame(height: 0.5)
         }
     }
 }
