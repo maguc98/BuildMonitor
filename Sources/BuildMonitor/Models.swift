@@ -5,26 +5,26 @@ enum BuildStatus: String, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .success: "构建成功"
-        case .inProgress: "构建中"
-        case .queued: "排队中"
-        case .failed: "构建失败"
+        case .success: return "构建成功"
+        case .inProgress: return "构建中"
+        case .queued: return "排队中"
+        case .failed: return "构建失败"
         }
     }
     var symbol: String {
         switch self {
-        case .success: "checkmark.circle.fill"
-        case .inProgress: "arrow.triangle.2.circlepath"
-        case .queued: "hourglass"
-        case .failed: "xmark.circle.fill"
+        case .success: return "checkmark.circle.fill"
+        case .inProgress: return "arrow.triangle.2.circlepath"
+        case .queued: return "hourglass"
+        case .failed: return "xmark.circle.fill"
         }
     }
     var color: Color {
         switch self {
-        case .success: Palette.success
-        case .inProgress: Palette.blue
-        case .queued: Palette.purple
-        case .failed: Palette.danger
+        case .success: return Palette.success
+        case .inProgress: return Palette.blue
+        case .queued: return Palette.purple
+        case .failed: return Palette.danger
         }
     }
 }
@@ -53,18 +53,18 @@ enum StepState: Equatable {
     case complete, active, waiting, failed
     var color: Color {
         switch self {
-        case .complete: Palette.success
-        case .active: Palette.blue
-        case .waiting: Palette.line
-        case .failed: Palette.danger
+        case .complete: return Palette.success
+        case .active: return Palette.blue
+        case .waiting: return Palette.line
+        case .failed: return Palette.danger
         }
     }
     var symbol: String {
         switch self {
-        case .complete: "checkmark"
-        case .active: "arrow.triangle.2.circlepath"
-        case .waiting: "circle"
-        case .failed: "xmark"
+        case .complete: return "checkmark"
+        case .active: return "arrow.triangle.2.circlepath"
+        case .waiting: return "circle"
+        case .failed: return "xmark"
         }
     }
 }
