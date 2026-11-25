@@ -8,10 +8,16 @@ settings:
     SWIFT_VERSION: 5.9
     IPHONEOS_DEPLOYMENT_TARGET: 17.0
     TARGETED_DEVICE_FAMILY: "1"
+packages:
+  ZIPFoundation:
+    url: https://github.com/ZipFoundation/ZipFoundation.git
+    from: 0.9.19
 targets:
   BuildMonitor:
     type: application
     platform: iOS
+    dependencies:
+      - package: ZIPFoundation
     sources:
       - path: Sources/BuildMonitor
     info:

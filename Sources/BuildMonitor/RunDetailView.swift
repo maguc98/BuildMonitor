@@ -18,6 +18,9 @@ struct RunDetailView: View {
     @State private var errorMessage: String?
     @State private var downloadingArtifactID: Int?
     @State private var shareURL: URL?
+    @State private var extractedFolderURL: URL?
+    @State private var isExtractingArtifactID: Int?
+    @State private var artifactError: String?
 
     var body: some View {
         ZStack {
@@ -291,49 +294,81 @@ struct RunDetailView: View {
                 )
             }
 
+            if let artifactError {
+                Text(artifactError).font(.system(size: 12)).foregroundStyle(Palette.danger)
+                    .padding(12).glassCard(14)
+            }
+
+            if let extractedFolderURL {
+                NavigationLink {
+                    ArtifactBrowserView(rootURL: extractedFolderURL)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "folder.fill").foregroundStyle(Palette.success)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("已解压的文件").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
+                            Text(extractedFolderURL.lastPathComponent).font(.system(size: 10)).foregroundStyle(Palette.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").foregroundStyle(Palette.secondary)
+                    }.padding(13).glassCard(15)
+                }
+            }
+
             ForEach(artifacts) { artifact in
-                HStack(spacing: 12) {
-                    Image(systemName: "doc.zipper")
-                        .font(.system(size: 25))
-                        .foregroundStyle(Palette.blue)
-                        .frame(width: 48, height: 48)
-                        .background(Palette.blue.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(artifact.name)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Palette.ink)
-                            .lineLimit(2)
-                        Text("\(artifact.formattedSize) · \(artifact.expired ? "已过期" : "可下载")")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(artifact.expired ? Palette.danger : Palette.secondary)
+                VStack(alignment: .leading, spacing: 11) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "doc.zipper")
+                            .font(.system(size: 24))
+                            .foregroundStyle(Palette.blue)
+                            .frame(width: 44, height: 44)
+                            .background(Palette.blue.opacity(0.10), in: RoundedRectangle(cornerRadius: 13))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(artifact.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink).lineLimit(2)
+                            Text("\(artifact.formattedSize) · \(artifact.expired ? "已过期" : "可下载")")
+                                .font(.system(size: 10, weight: .medium)).foregroundStyle(artifact.expired ? Palette.danger : Palette.secondary)
+                        }
+                        Spacer()
                     }
-                    Spacer()
-
                     if artifact.expired {
-                        Image(systemName: "xmark.circle")
-                            .foregroundStyle(Palette.danger)
-                    } else if downloadingArtifactID == artifact.id {
-                        ProgressView().tint(Palette.blue)
+                        Label("Artifact 已过期", systemImage: "xmark.circle").font(.system(size: 11)).foregroundStyle(Palette.danger)
+                    } else if downloadingArtifactID == artifact.id || isExtractingArtifactID == artifact.id {
+                        HStack { ProgressView().tint(Palette.blue); Text(isExtractingArtifactID == artifact.id ? "正在解压…" : "正在下载…").font(.system(size: 11)).foregroundStyle(Palette.secondary) }
                     } else {
-                        Button {
-                            Task { await download(artifact) }
-                        } label: {
-                            Image(systemName: "arrow.down.circle.fill")
-                                .font(.system(size: 22))
-                                .foregroundStyle(Palette.blue)
+                        HStack(spacing: 9) {
+                            Button { Task { await downloadAndExtract(artifact) } } label: {
+                                Label("下载并解压", systemImage: "archivebox").font(.system(size: 11, weight: .semibold))
+                                    .frame(maxWidth: .infinity).padding(.vertical, 10)
+                                    .background(Palette.blue.opacity(0.12), in: Capsule()).foregroundStyle(Palette.blue)
+                            }
+                            Button { Task { await download(artifact) } } label: {
+                                Label("下载 ZIP", systemImage: "arrow.down.circle").font(.system(size: 11, weight: .semibold))
+                                    .frame(maxWidth: .infinity).padding(.vertical, 10)
+                                    .background(Color.white.opacity(0.65), in: Capsule()).foregroundStyle(Palette.secondary)
+                            }
                         }
                     }
-                }
-                .padding(14)
-                .glassCard(18)
+                }.padding(14).glassCard(18)
             }
+            Text("ZIP 会保存在 App 本地；解压后的文件可直接在 App 内浏览、预览文本、分享或导出。")
+                .font(.system(size: 10)).foregroundStyle(Palette.secondary)
+        }
+    }
 
-            if !artifacts.isEmpty {
-                Text("下载内容为 GitHub Artifact ZIP 压缩包，IPA 文件包含在其中。")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Palette.secondary)
-            }
+    private func downloadAndExtract(_ artifact: WorkflowArtifact) async {
+        downloadingArtifactID = artifact.id
+        artifactError = nil
+        do {
+            let zipURL = try await store.downloadArtifact(repository: repository.fullName, artifact: artifact)
+            downloadingArtifactID = nil
+            isExtractingArtifactID = artifact.id
+            let folder = try ArtifactArchiveService.extract(zipURL: zipURL, name: artifact.name, id: artifact.id)
+            extractedFolderURL = folder
+            isExtractingArtifactID = nil
+        } catch {
+            downloadingArtifactID = nil
+            isExtractingArtifactID = nil
+            artifactError = error.localizedDescription
         }
     }
 
