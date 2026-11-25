@@ -145,54 +145,69 @@ struct StatusGlyph: View {
     }
 
     var body: some View {
-        Group {
-            switch status {
-            case .inProgress:
-                ZStack {
-                    Circle()
-                        .stroke(status.color.opacity(0.18), lineWidth: 2)
-                    Circle()
-                        .trim(from: 0, to: 0.30)
-                        .stroke(status.color, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
-                        .rotationEffect(.degrees(animationActive ? 360 : 0))
-                }
-                .frame(width: size + 7, height: size + 7)
-            case .queued:
-                Image(systemName: status.symbol)
-                    .font(.system(size: size, weight: .bold))
-                    .rotationEffect(.degrees(animationActive ? 180 : 0))
-                    .frame(width: size + 7, height: size + 7)
-            case .success:
-                Image(systemName: status.symbol)
-                    .font(.system(size: size, weight: .bold))
-                    .symbolEffect(.bounce, value: status)
-                    .frame(width: size + 7, height: size + 7)
-            case .failed:
-                ZStack {
-                    Circle()
-                        .stroke(status.color.opacity(animationActive ? 0.34 : 0.12), lineWidth: 1.8)
-                        .scaleEffect(animationActive ? 1.12 : 0.84)
-                    Image(systemName: status.symbol)
-                        .font(.system(size: size, weight: .bold))
-                        .scaleEffect(animationActive ? 1.06 : 0.94)
-                }
-                .frame(width: size + 7, height: size + 7)
-            }
+        glyph
+            .foregroundStyle(status.color)
+            .frame(width: size + 9, height: size + 9)
+            .onAppear(perform: startAnimation)
+            .onChange(of: status) { _, _ in startAnimation() }
+            .onChange(of: reduceMotion) { _, _ in startAnimation() }
+            .animation(repeatingAnimation, value: animationActive)
+    }
+
+    @ViewBuilder
+    private var glyph: some View {
+        switch status {
+        case .inProgress:
+            runningGlyph
+        case .queued:
+            queuedGlyph
+        case .success:
+            successGlyph
+        case .failed:
+            failedGlyph
         }
-        .foregroundStyle(status.color)
-        .frame(width: size + 9, height: size + 9)
-        .onAppear {
-            guard !reduceMotion, status == .inProgress || status == .queued || status == .failed else { return }
-            animationActive = true
+    }
+
+    private var runningGlyph: some View {
+        ZStack {
+            Circle().stroke(status.color.opacity(0.18), lineWidth: 2)
+            Circle()
+                .trim(from: 0, to: 0.30)
+                .stroke(status.color, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                .rotationEffect(.degrees(animationActive ? 360 : 0))
         }
-        .onChange(of: status) { _, newStatus in
-            animationActive = !reduceMotion && (newStatus == .inProgress || newStatus == .queued || newStatus == .failed)
+        .frame(width: size + 7, height: size + 7)
+    }
+
+    private var queuedGlyph: some View {
+        Image(systemName: status.symbol)
+            .font(.system(size: size, weight: .bold))
+            .rotationEffect(.degrees(animationActive ? 180 : 0))
+            .frame(width: size + 7, height: size + 7)
+    }
+
+    private var successGlyph: some View {
+        Image(systemName: status.symbol)
+            .font(.system(size: size, weight: .bold))
+            .symbolEffect(.bounce, value: status)
+            .frame(width: size + 7, height: size + 7)
+    }
+
+    private var failedGlyph: some View {
+        ZStack {
+            Circle()
+                .stroke(status.color.opacity(animationActive ? 0.34 : 0.12), lineWidth: 1.8)
+                .scaleEffect(animationActive ? 1.12 : 0.84)
+            Image(systemName: status.symbol)
+                .font(.system(size: size, weight: .bold))
+                .scaleEffect(animationActive ? 1.06 : 0.94)
         }
-        .onChange(of: reduceMotion) { _, isReduced in
-            if isReduced { animationActive = false }
-            else if status == .inProgress || status == .queued || status == .failed { animationActive = true }
-        }
-        .animation(repeatingAnimation, value: animationActive)
+        .frame(width: size + 7, height: size + 7)
+    }
+
+    private func startAnimation() {
+        let shouldAnimate = !reduceMotion && (status == .inProgress || status == .queued || status == .failed)
+        animationActive = shouldAnimate
     }
 }
 
@@ -589,7 +604,7 @@ private struct RepositoryCard: View {
             Spacer(minLength: 2)
             Text(activeRun.status == "in_progress" ? "运行中" : "排队中")
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(activeRun.status == "in_progress" ? Palette.blue : Palette.orange)
+                .foregroundStyle(activeRun.status == "in_progress" ? Palette.blue : Palette.purple)
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 7)
