@@ -8,16 +8,16 @@ struct RootTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             NavigationStack { DashboardView() }
-                .tabItem { Label("项目", systemImage: "square.grid.2x2.fill").symbolEffect(.bounce, value: selectedTab == 0 && !reduceMotion) }
+                .tabItem { Label("项目", systemImage: "square.grid.2x2.fill").symbolEffect(.bounce, value: selectedTab) }
                 .tag(0)
             NavigationStack { HistoryView() }
-                .tabItem { Label("历史", systemImage: "clock").symbolEffect(.bounce, value: selectedTab == 1 && !reduceMotion) }
+                .tabItem { Label("历史", systemImage: "clock").symbolEffect(.bounce, value: selectedTab) }
                 .tag(1)
             NavigationStack { NotificationsView() }
-                .tabItem { Label("通知", systemImage: "bell").symbolEffect(.bounce, value: selectedTab == 2 && !reduceMotion) }
+                .tabItem { Label("通知", systemImage: "bell").symbolEffect(.bounce, value: selectedTab) }
                 .tag(2)
             NavigationStack { SettingsView() }
-                .tabItem { Label("设置", systemImage: "gearshape").symbolEffect(.bounce, value: selectedTab == 3 && !reduceMotion) }
+                .tabItem { Label("设置", systemImage: "gearshape").symbolEffect(.bounce, value: selectedTab) }
                 .tag(3)
         }
         .buttonStyle(AppPressableButtonStyle())
@@ -397,8 +397,7 @@ private struct SummaryTile: View {
 private struct RepositoryCard: View {
     let repository: GitHubRepository
     let run: WorkflowRun?
-    let activeRuns: [WorkflowRun]
-    let displayName: String
+    let activeRuns: [WorkflowRun]    let displayName: String
     let note: String
     private var tint: Color {
         let palette: [Color] = [Palette.blue, Palette.purple, Palette.success, .pink, .cyan, .orange]
@@ -782,86 +781,35 @@ extension RelativeDateTimeFormatter {
 
 struct RepositoryManagementView: View {
     @EnvironmentObject private var store: BuildMonitorStore
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\\.dismiss) private var dismiss
     @State private var showingHidden = false
     @State private var editingRepository: GitHubRepository?
+    @State private var searchText = ""
 
     private var displayedRepositories: [GitHubRepository] {
-        showingHidden ? store.hiddenRepositories : store.visibleRepositories
+        let base = showingHidden ? store.hiddenRepositories : store.visibleRepositories
+        guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return base }
+        return base.filter { repo in
+            store.displayName(for: repo).localizedCaseInsensitiveContains(searchText)
+                || repo.fullName.localizedCaseInsensitiveContains(searchText)
+                || store.note(for: repo).localizedCaseInsensitiveContains(searchText)
+        }
     }
 
     var body: some View {
         NavigationStack {
             ZStack {
                 AppBackground()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("仓库管理")
-                            .font(.system(size: 25, weight: .bold, design: .rounded))
-                            .foregroundStyle(Palette.ink)
-                        Text("隐藏仓库只会从项目列表中移除，不会删除仓库，也不会停止同步。备注和自定义名称仅保存在这台 iPhone。")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Palette.secondary)
-                        Picker("仓库状态", selection: $showingHidden) {
-                            Text("显示中 \(store.visibleRepositories.count)").tag(false)
-                            Text("已隐藏 \(store.hiddenRepositories.count)").tag(true)
-                        }
-                        .pickerStyle(.segmented)
-
-                        if displayedRepositories.isEmpty {
-                            ContentUnavailableView(
-                                showingHidden ? "没有隐藏的仓库" : "暂无显示中的仓库",
-                                systemImage: showingHidden ? "eye" : "tray",
-                                description: Text(showingHidden ? "隐藏的仓库会显示在这里。" : "你可以在“已隐藏”中恢复仓库。")
-                            )
-                            .padding(.top, 24)
-                        } else {
-                            ForEach(displayedRepositories) { repository in
-                                HStack(spacing: 10) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(store.displayName(for: repository))
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundStyle(Palette.ink)
-                                            .lineLimit(1)
-                                        Text(repository.fullName)
-                                            .font(.system(size: 10, weight: .medium))
-                                            .foregroundStyle(Palette.secondary)
-                                            .lineLimit(1)
-                                        if !store.note(for: repository).isEmpty {
-                                            Text(store.note(for: repository))
-                                                .font(.system(size: 11))
-                                                .foregroundStyle(Palette.secondary)
-                                                .lineLimit(2)
-                                        }
-                                    }
-                                    Spacer(minLength: 4)
-                                    Button {
-                                        editingRepository = repository
-                                    } label: {
-                                        Image(systemName: "pencil")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundStyle(Palette.blue)
-                                            .frame(width: 34, height: 36)
-                                    }
-                                    .accessibilityLabel("编辑仓库名称和备注")
-                                    Button {
-                                        withAnimation(.easeOut(duration: 0.18)) {
-                                            store.setRepositoryHidden(repository, hidden: !showingHidden)
-                                        }
-                                    } label: {
-                                        Image(systemName: showingHidden ? "eye" : "eye.slash")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundStyle(showingHidden ? Palette.success : Palette.secondary)
-                                            .frame(width: 34, height: 36)
-                                    }
-                                    .accessibilityLabel(showingHidden ? "显示仓库" : "隐藏仓库")
-                                }
-                                .padding(13)
-                                .glassCard(18)
-                            }
-                        }
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        hero
+                        searchField
+                        statePicker
+                        repositoryList
                     }
-                    .padding(18)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 12)
+                    .padding(.bottom, 28)
                 }
             }
             .navigationTitle("仓库管理")
@@ -869,6 +817,7 @@ struct RepositoryManagementView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("完成") { dismiss() }
+                        .fontWeight(.semibold)
                 }
             }
             .sheet(item: $editingRepository) { repository in
@@ -882,6 +831,166 @@ struct RepositoryManagementView: View {
                 .presentationDragIndicator(.visible)
             }
         }
+    }
+
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 17, style: .continuous)
+                        .fill(LinearGradient(colors: [Palette.blue.opacity(0.18), Palette.purple.opacity(0.16)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    Image(systemName: "folder.badge.gearshape")
+                        .font(.system(size: 25, weight: .semibold))
+                        .foregroundStyle(Palette.blue)
+                }
+                .frame(width: 54, height: 54)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("管理你的项目")
+                        .font(.system(size: 21, weight: .bold, design: .rounded))
+                        .foregroundStyle(Palette.ink)
+                    Text("自定义名称、备注和可见状态")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Palette.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 9) {
+                managementStat(title: "全部仓库", count: store.repositories.count, icon: "square.grid.2x2.fill", tint: Palette.blue)
+                managementStat(title: "显示中", count: store.visibleRepositories.count, icon: "eye.fill", tint: Palette.success)
+                managementStat(title: "已隐藏", count: store.hiddenRepositories.count, icon: "eye.slash.fill", tint: Palette.purple)
+            }
+        }
+        .padding(15)
+        .glassCard(22)
+        .motionAppear(0.03)
+    }
+
+    private func managementStat(title: String, count: Int, icon: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 5) {
+                Image(systemName: icon).font(.system(size: 10, weight: .semibold)).foregroundStyle(tint)
+                Text(title).font(.system(size: 10, weight: .medium)).foregroundStyle(Palette.secondary)
+            }
+            Text("\\(count)")
+                .font(.system(size: 19, weight: .bold, design: .rounded))
+                .foregroundStyle(Palette.ink)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(11)
+        .background(tint.opacity(0.07), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "magnifyingglass").foregroundStyle(Palette.secondary)
+            TextField("搜索仓库名称、备注或用户名", text: $searchText)
+                .font(.system(size: 13))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Palette.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 12)
+        .background(Color.white.opacity(0.86), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).stroke(.white.opacity(0.9), lineWidth: 1))
+        .shadow(color: Palette.ink.opacity(0.025), radius: 5, y: 2)
+    }
+
+    private var statePicker: some View {
+        Picker("仓库状态", selection: $showingHidden.animation(.easeInOut(duration: 0.22))) {
+            Text("显示中 · \\(store.visibleRepositories.count)").tag(false)
+            Text("已隐藏 · \\(store.hiddenRepositories.count)").tag(true)
+        }
+        .pickerStyle(.segmented)
+        .padding(4)
+        .background(Color.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 13))
+    }
+
+    @ViewBuilder
+    private var repositoryList: some View {
+        if displayedRepositories.isEmpty {
+            ContentUnavailableView(
+                searchText.isEmpty ? (showingHidden ? "没有隐藏的仓库" : "暂无显示中的仓库") : "没有匹配的仓库",
+                systemImage: searchText.isEmpty ? (showingHidden ? "eye" : "tray") : "magnifyingglass",
+                description: Text(searchText.isEmpty ? (showingHidden ? "隐藏的仓库会显示在这里。" : "你可以切换到“已隐藏”恢复仓库。") : "尝试搜索仓库名、完整路径或备注。")
+            )
+            .padding(.top, 24)
+            .motionAppear(0.04)
+        } else {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack {
+                    Text(showingHidden ? "隐藏列表" : "仓库列表")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(Palette.ink)
+                    Spacer()
+                    Text("\\(displayedRepositories.count) 项")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Palette.secondary)
+                }
+                ForEach(displayedRepositories) { repository in
+                    repositoryRow(repository)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.84), value: showingHidden)
+            .animation(.easeInOut(duration: 0.2), value: searchText)
+        }
+    }
+
+    private func repositoryRow(_ repository: GitHubRepository) -> some View {
+        HStack(spacing: 11) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(LinearGradient(colors: [Palette.blue.opacity(0.16), Palette.purple.opacity(0.13)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                Text(String(store.displayName(for: repository).prefix(1)).uppercased())
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(Palette.blue)
+            }
+            .frame(width: 42, height: 42)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(store.displayName(for: repository))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.ink)
+                    .lineLimit(1)
+                Text(repository.fullName)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Palette.secondary)
+                    .lineLimit(1)
+                if !store.note(for: repository).isEmpty {
+                    Text(store.note(for: repository))
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 3)
+            Button { editingRepository = repository } label: {
+                Image(systemName: "pencil")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Palette.blue)
+                    .frame(width: 34, height: 34)
+                    .background(Palette.blue.opacity(0.09), in: RoundedRectangle(cornerRadius: 11))
+            }
+            .accessibilityLabel("编辑仓库名称和备注")
+            Button {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                    store.setRepositoryHidden(repository, hidden: !showingHidden)
+                }
+            } label: {
+                Image(systemName: showingHidden ? "eye.fill" : "eye.slash.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(showingHidden ? Palette.success : Palette.secondary)
+                    .frame(width: 34, height: 34)
+                    .background((showingHidden ? Palette.success : Palette.secondary).opacity(0.09), in: RoundedRectangle(cornerRadius: 11))
+            }
+            .accessibilityLabel(showingHidden ? "显示仓库" : "隐藏仓库")
+        }
+        .padding(12)
+        .glassCard(18)
     }
 }
 
