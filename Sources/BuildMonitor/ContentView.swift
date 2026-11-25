@@ -206,7 +206,7 @@ struct StatusGlyph: View {
                 .frame(width: size + 7, height: size + 7)
         case .failed:
             ZStack {
-                Circle().stroke(status.color.opacity(0.24 + (sin(phase * 3.2) + 1) * 0.10, lineWidth: 1.8)
+                Circle().stroke(status.color.opacity(0.24 + (sin(phase * 3.2) + 1) * 0.10), lineWidth: 1.8)
                     .scaleEffect(0.94 + (sin(phase * 3.2) + 1) * 0.04)
                 Image(systemName: status.symbol)
                     .font(.system(size: size, weight: .bold))
