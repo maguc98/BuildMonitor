@@ -119,12 +119,18 @@ struct RunDetailView: View {
         HStack(spacing: 10) {
             AppMark(size: 42)
             VStack(alignment: .leading, spacing: 3) {
-                Text(repository.name)
+                Text(store.displayName(for: repository))
                     .font(.system(size: 21, weight: .bold, design: .rounded))
                     .foregroundStyle(Palette.ink)
                 Text(repository.fullName)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Palette.secondary)
+                if !store.note(for: repository).isEmpty {
+                    Text(store.note(for: repository))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Palette.secondary)
+                        .lineLimit(2)
+                }
             }
             Spacer()
             if repository.isPrivate {
