@@ -292,6 +292,7 @@ final class BuildMonitorStore: ObservableObject {
 
     private let api = GitHubAPIClient()
     private var token: String?
+    private var pollingTask: Task<Void, Never>?
     var isConnected: Bool { token != nil }
 
     var allRecentRuns: [RepositoryRun] {
@@ -327,10 +328,13 @@ final class BuildMonitorStore: ObservableObject {
         token = cleaned
         username = user.login
         await refresh()
+        startPolling()
+        BackgroundRefreshScheduler.schedule()
         if let errorMessage { throw GitHubAPIError.server(errorMessage) }
     }
 
     func disconnect() {
+        stopPolling()
         TokenKeychain.delete()
         token = nil
         username = nil
@@ -339,6 +343,7 @@ final class BuildMonitorStore: ObservableObject {
         lastRefreshed = nil
         hasLoaded = false
         errorMessage = nil
+        RunNotificationTracker.reset()
     }
 
     func refresh() async {
@@ -369,11 +374,39 @@ final class BuildMonitorStore: ObservableObject {
                 return values
             }
             runsByRepository = Dictionary(uniqueKeysWithValues: results)
+
+            let observedRuns = fetchedRepositories.prefix(40).flatMap { repository in
+                (runsByRepository[repository.fullName] ?? []).map {
+                    RepositoryRun(repository: repository, run: $0)
+                }
+            }
+            await RunNotificationTracker.process(observedRuns)
+
             lastRefreshed = Date()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    func startPolling(interval: UInt64 = 60) {
+        guard token != nil, pollingTask == nil else { return }
+        pollingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(nanoseconds: interval * 1_000_000_000)
+                } catch {
+                    break
+                }
+                guard !Task.isCancelled else { break }
+                await self?.refresh()
+            }
+        }
+    }
+
+    func stopPolling() {
+        pollingTask?.cancel()
+        pollingTask = nil
     }
 
     func loadRunDetails(repository: String, runID: Int) async throws -> (jobs: [WorkflowJob], artifacts: [WorkflowArtifact]) {
@@ -390,5 +423,196 @@ final class BuildMonitorStore: ObservableObject {
         let destination = FileManager.default.temporaryDirectory.appendingPathComponent("\(safeName)-\(artifact.id).zip")
         try data.write(to: destination, options: .atomic)
         return destination
+    }
+}
+
+
+enum BuildNotificationManager {
+    static let enabledKey = "buildNotifications.enabled"
+    static let successKey = "buildNotifications.success"
+    static let failureKey = "buildNotifications.failure"
+
+    static func registerDefaults() {
+        UserDefaults.standard.register(defaults: [
+            enabledKey: false,
+            successKey: true,
+            failureKey: true
+        ])
+    }
+
+    static func requestAuthorization() async -> Bool {
+        do {
+            return try await UNUserNotificationCenter.current()
+                .requestAuthorization(options: [.alert, .sound, .badge])
+        } catch {
+            return false
+        }
+    }
+
+    static func post(repository: String, run: WorkflowRun, status: BuildStatus) async {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: enabledKey) else { return }
+        if status == .success && !defaults.bool(forKey: successKey) { return }
+        if status == .failed && !defaults.bool(forKey: failureKey) { return }
+        guard status == .success || status == .failed else { return }
+
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        guard settings.authorizationStatus == .authorized ||
+              settings.authorizationStatus == .provisional else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = status == .success ? "构建成功" : "构建失败"
+        content.body = "\(repository) · \(run.title) · #\(run.runNumber)"
+        content.sound = .default
+        content.userInfo = [
+            "repository": repository,
+            "runID": run.id
+        ]
+
+        let request = UNNotificationRequest(
+            identifier: "build-monitor-\(run.id)-\(status.rawValue)",
+            content: content,
+            trigger: nil
+        )
+        try? await center.add(request)
+    }
+}
+
+enum RunNotificationTracker {
+    private static let snapshotKey = "buildNotifications.runSnapshot.v1"
+    private static let lastSyncKey = "buildNotifications.lastSync.v1"
+
+    static func reset() {
+        UserDefaults.standard.removeObject(forKey: snapshotKey)
+        UserDefaults.standard.removeObject(forKey: lastSyncKey)
+    }
+
+    static func process(_ items: [RepositoryRun]) async {
+        let defaults = UserDefaults.standard
+        let previous = defaults.dictionary(forKey: snapshotKey) as? [String: String]
+        let firstSnapshot = previous == nil
+        let lastSync = defaults.object(forKey: lastSyncKey) as? Date
+        var next = previous ?? [:]
+
+        for item in items {
+            let key = "\(item.repository.fullName)#\(item.run.id)"
+            let current = item.run.buildStatus.rawValue
+            let isTerminal = item.run.buildStatus == .success || item.run.buildStatus == .failed
+            guard isTerminal else {
+                next[key] = current
+                continue
+            }
+
+            var shouldNotify = false
+            if let oldStatus = previous?[key] {
+                shouldNotify = oldStatus != current
+            } else if !firstSnapshot, let lastSync,
+                      let createdAt = ISO8601DateFormatter().date(from: item.run.createdAt) {
+                shouldNotify = createdAt > lastSync
+            }
+
+            if shouldNotify {
+                await BuildNotificationManager.post(
+                    repository: item.repository.fullName,
+                    run: item.run,
+                    status: item.run.buildStatus
+                )
+            }
+            next[key] = current
+        }
+
+        defaults.set(next, forKey: snapshotKey)
+        defaults.set(Date(), forKey: lastSyncKey)
+    }
+}
+
+enum BackgroundRefreshScheduler {
+    static let identifier = "com.maguc98.BuildMonitor.refresh"
+
+    static func register() {
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: nil) { task in
+            guard let refreshTask = task as? BGAppRefreshTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            handle(refreshTask)
+        }
+    }
+
+    static func schedule() {
+        guard TokenKeychain.read() != nil,
+              UserDefaults.standard.bool(forKey: BuildNotificationManager.enabledKey) else { return }
+
+        let request = BGAppRefreshTaskRequest(identifier: identifier)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+        do {
+            try BGTaskScheduler.shared.submit(request)
+        } catch {
+            // iOS decides when the task can run; scheduling may be deferred or rejected.
+        }
+    }
+
+    private static func handle(_ task: BGAppRefreshTask) {
+        schedule()
+        let operation = Task {
+            let succeeded = await BackgroundRefreshWorker.run()
+            task.setTaskCompleted(success: succeeded)
+        }
+        task.expirationHandler = {
+            operation.cancel()
+        }
+    }
+}
+
+enum BackgroundRefreshWorker {
+    static func run() async -> Bool {
+        guard UserDefaults.standard.bool(forKey: BuildNotificationManager.enabledKey),
+              let token = TokenKeychain.read() else { return true }
+
+        let api = GitHubAPIClient()
+        do {
+            let repositories = try await api.repositories(token: token)
+            let selected = Array(repositories.prefix(20))
+            let results = await withTaskGroup(of: [RepositoryRun].self) { group in
+                for repository in selected {
+                    group.addTask {
+                        do {
+                            let runs = try await api.workflowRuns(token: token, repository: repository.fullName)
+                            return runs.map { RepositoryRun(repository: repository, run: $0) }
+                        } catch {
+                            return []
+                        }
+                    }
+                }
+
+                var collected: [RepositoryRun] = []
+                for await batch in group {
+                    collected.append(contentsOf: batch)
+                }
+                return collected
+            }
+
+            await RunNotificationTracker.process(results)
+            return true
+        } catch {
+            return false
+        }
+    }
+}
+
+final class BuildNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = BuildNotificationDelegate()
+
+    static func install() {
+        UNUserNotificationCenter.current().delegate = shared
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .list, .sound])
     }
 }

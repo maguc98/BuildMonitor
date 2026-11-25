@@ -17,6 +17,13 @@ targets:
     platform: iOS
     sources:
       - path: Sources/BuildMonitor
+    info:
+      path: Sources/BuildMonitor/Info.plist
+      properties:
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.maguc98.BuildMonitor.refresh
+        UIBackgroundModes:
+          - fetch
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.maguc98.BuildMonitor

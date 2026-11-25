@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootTabView: View {
     @StateObject private var store = BuildMonitorStore()
+    @Environment(\.scenePhase) private var scenePhase
     var body: some View {
         TabView {
             NavigationStack { DashboardView() }
@@ -17,7 +18,21 @@ struct RootTabView: View {
         .toolbarBackground(.visible, for: .tabBar)
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
         .environmentObject(store)
-        .task { await store.restoreSession() }
+        .task {
+            await store.restoreSession()
+            if scenePhase == .active { store.startPolling() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task {
+                    await store.refresh()
+                    store.startPolling()
+                }
+            } else {
+                store.stopPolling()
+                BackgroundRefreshScheduler.schedule()
+            }
+        }
     }
 }
 
@@ -324,6 +339,9 @@ struct NotificationsView: View {
 struct SettingsView: View {
     @EnvironmentObject private var store: BuildMonitorStore
     @State private var showConnection = false
+    @AppStorage("buildNotifications.enabled") private var notificationsEnabled = false
+    @AppStorage("buildNotifications.success") private var successNotifications = true
+    @AppStorage("buildNotifications.failure") private var failureNotifications = true
     var body: some View {
         ZStack {
             AppBackground()
@@ -349,6 +367,14 @@ struct SettingsView: View {
                         Divider().padding(.leading, 48)
                         SettingsRow(icon: "checkmark.shield", title: "Token 存储", value: "iOS 钥匙串")
                         Divider().padding(.leading, 48)
+                        NotificationToggleRow(icon: "bell.badge", title: "构建状态通知", value: $notificationsEnabled)
+                        if notificationsEnabled {
+                            Divider().padding(.leading, 48)
+                            NotificationToggleRow(icon: "checkmark.circle", title: "构建成功通知", value: $successNotifications)
+                            Divider().padding(.leading, 48)
+                            NotificationToggleRow(icon: "xmark.circle", title: "构建失败通知", value: $failureNotifications)
+                        }
+                        Divider().padding(.leading, 48)
                         SettingsRow(icon: "arrow.clockwise", title: "手动同步", value: store.isLoading ? "同步中…" : "立即刷新", action: { Task { await store.refresh() } })
                         Divider().padding(.leading, 48)
                         SettingsRow(icon: "paintbrush", title: "主题外观", value: "浅色")
@@ -365,10 +391,43 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
+        .onChange(of: notificationsEnabled) { _, enabled in
+            if enabled {
+                Task {
+                    let granted = await BuildNotificationManager.requestAuthorization()
+                    if !granted {
+                        notificationsEnabled = false
+                    } else {
+                        BackgroundRefreshScheduler.schedule()
+                    }
+                }
+            }
+        }
+        .onChange(of: successNotifications) { _, _ in
+            BackgroundRefreshScheduler.schedule()
+        }
+        .onChange(of: failureNotifications) { _, _ in
+            BackgroundRefreshScheduler.schedule()
+        }
         .sheet(isPresented: $showConnection) {
             TokenConnectionView().environmentObject(store)
                 .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
+    }
+}
+
+private struct NotificationToggleRow: View {
+    let icon: String
+    let title: String
+    @Binding var value: Bool
+
+    var body: some View {
+        HStack {
+            Image(systemName: icon).foregroundStyle(Palette.blue).frame(width: 24)
+            Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
+            Spacer()
+            Toggle(title, isOn: $value).labelsHidden().tint(Palette.blue)
+        }.padding(14)
     }
 }
 

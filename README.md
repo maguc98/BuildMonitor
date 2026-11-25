@@ -1,29 +1,25 @@
 # Build Monitor
 
-Native SwiftUI iOS app for monitoring GitHub Actions across repositories.
+A native SwiftUI iOS app for monitoring GitHub Actions builds across repositories.
 
-## Features
+## Current milestone
 
-- Connect GitHub with a fine-grained personal access token.
-- Store the token in the iOS Keychain (not in source files or UserDefaults).
-- Discover accessible repositories and read recent Actions workflow runs.
-- Dashboard counters for success, in-progress, queued, and failed runs.
-- Inspect actual jobs and steps for a workflow run.
-- Read uploaded Artifact metadata and download the Artifact ZIP for sharing.
-- Open a workflow or job on GitHub for full console output.
+The first SwiftUI interface follows the approved pastel blue / lavender glass-style design:
+- Repository dashboard and build-status summary
+- Build detail with step timeline, log preview, and artifact panel
+- History, notifications, and settings tabs
+- XcodeGen project configuration
+- GitHub Actions workflow for simulator/device builds and unsigned IPA artifact packaging
 
-The dashboard only shows GitHub data after a token has been connected. Repository workflow summaries are fetched for the 40 most recently updated repositories to keep API usage bounded; all accessible repositories are listed.
-
-## Required token permissions
-
-Use a fine-grained personal access token, select the repositories to monitor, and grant:
-- Metadata: Read-only
-- Actions: Read-only
-
-Classic tokens may require the appropriate repository access. Never commit a token, .p12 certificate, provisioning profile, or signing secret.
+Current screens use clearly labeled demonstration data. GitHub authorization, live workflow synchronization, real logs, artifact downloads, and notifications are not connected yet.
 
 ## Build
 
-Requires Xcode 15+ and XcodeGen. Run xcodegen generate --spec project.yml, then build the BuildMonitor scheme.
+Requires Xcode 15+ and XcodeGen. Run brew install xcodegen, then xcodegen generate. Build with:
+xcodebuild -project BuildMonitor.xcodeproj -scheme BuildMonitor -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build
 
-GitHub Actions builds for simulator and iPhone, packages an unsigned IPA, and uploads it as an Actions artifact.
+The GitHub Actions workflow runs on pushes to main and can also be started manually. It builds for simulator and iPhone, packages an unsigned IPA, and uploads it as an Actions artifact.
+
+## Security
+
+Do not commit personal access tokens, .p12 certificates, provisioning profiles, or signing secrets. Future GitHub credentials will be stored in the iOS Keychain.
