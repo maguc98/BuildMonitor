@@ -25,6 +25,7 @@ struct GitHubRepository: Decodable, Identifiable, Hashable {
         case htmlURL = "html_url"
         case defaultBranch = "default_branch"
         case updatedAt = "updated_at"
+        case runStartedAt = "run_started_at"
     }
 }
 
@@ -503,7 +504,7 @@ final class BuildMonitorStore: ObservableObject {
         }
     }
 
-    func startPolling(interval: UInt64 = 60) {
+    func startPolling(interval: UInt64 = 1) {
         guard token != nil, pollingTask == nil else { return }
         pollingTask = Task { [weak self] in
             while !Task.isCancelled {
