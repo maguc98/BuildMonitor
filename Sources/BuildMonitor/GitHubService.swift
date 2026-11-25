@@ -491,9 +491,9 @@ final class BuildMonitorStore: ObservableObject {
                 return values
             }
             let newRunsByRepository = Dictionary(uniqueKeysWithValues: results)
-            var updateTransaction = Transaction()
-            updateTransaction.animation = nil
-            withTransaction(updateTransaction) {
+            // Silent background refreshes still animate data changes in-place.
+            // Keep network activity unobtrusive; animate only the UI updates.
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
                 repositories = fetchedRepositories
                 runsByRepository = newRunsByRepository
             }
