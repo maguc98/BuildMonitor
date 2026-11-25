@@ -131,6 +131,19 @@ struct StatusGlyph: View {
     let status: BuildStatus
     var size: CGFloat = 14
 
+    private var repeatingAnimation: Animation? {
+        switch status {
+        case .inProgress:
+            return .linear(duration: 1.1).repeatForever(autoreverses: false)
+        case .queued:
+            return .easeInOut(duration: 0.72).repeatForever(autoreverses: true)
+        case .failed:
+            return .easeInOut(duration: 0.85).repeatForever(autoreverses: true)
+        case .success:
+            return nil
+        }
+    }
+
     var body: some View {
         Group {
             switch status {
@@ -149,29 +162,37 @@ struct StatusGlyph: View {
                     .font(.system(size: size, weight: .bold))
                     .rotationEffect(.degrees(animationActive ? 180 : 0))
                     .frame(width: size + 7, height: size + 7)
-            case .success, .failed:
+            case .success:
                 Image(systemName: status.symbol)
                     .font(.system(size: size, weight: .bold))
                     .symbolEffect(.bounce, value: status)
                     .frame(width: size + 7, height: size + 7)
+            case .failed:
+                ZStack {
+                    Circle()
+                        .stroke(status.color.opacity(animationActive ? 0.34 : 0.12), lineWidth: 1.8)
+                        .scaleEffect(animationActive ? 1.12 : 0.84)
+                    Image(systemName: status.symbol)
+                        .font(.system(size: size, weight: .bold))
+                        .scaleEffect(animationActive ? 1.06 : 0.94)
+                }
+                .frame(width: size + 7, height: size + 7)
             }
         }
         .foregroundStyle(status.color)
         .frame(width: size + 9, height: size + 9)
         .onAppear {
-            guard !reduceMotion, status == .inProgress || status == .queued else { return }
+            guard !reduceMotion, status == .inProgress || status == .queued || status == .failed else { return }
             animationActive = true
+        }
+        .onChange(of: status) { _, newStatus in
+            animationActive = !reduceMotion && (newStatus == .inProgress || newStatus == .queued || newStatus == .failed)
         }
         .onChange(of: reduceMotion) { _, isReduced in
             if isReduced { animationActive = false }
-            else if status == .inProgress || status == .queued { animationActive = true }
+            else if status == .inProgress || status == .queued || status == .failed { animationActive = true }
         }
-        .animation(
-            status == .inProgress
-                ? .linear(duration: 1.1).repeatForever(autoreverses: false)
-                : .easeInOut(duration: 0.72).repeatForever(autoreverses: true),
-            value: animationActive
-        )
+        .animation(repeatingAnimation, value: animationActive)
     }
 }
 
