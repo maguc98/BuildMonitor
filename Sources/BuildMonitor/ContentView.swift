@@ -170,12 +170,12 @@ private struct ProjectCard: View {
 
     private var tint: Color {
         switch project.initials {
-        case "H": Color(red: 0.31, green: 0.52, blue: 0.98)
-        case "L": Palette.purple
-        case "M": Color(red: 0.27, green: 0.78, blue: 0.68)
-        case "Y": Color(red: 0.96, green: 0.38, blue: 0.67)
-        case "T": Color(red: 0.27, green: 0.68, blue: 0.95)
-        default: Color(red: 0.45, green: 0.69, blue: 0.79)
+        case "H": return Color(red: 0.31, green: 0.52, blue: 0.98)
+        case "L": return Palette.purple
+        case "M": return Color(red: 0.27, green: 0.78, blue: 0.68)
+        case "Y": return Color(red: 0.96, green: 0.38, blue: 0.67)
+        case "T": return Color(red: 0.27, green: 0.68, blue: 0.95)
+        default: return Color(red: 0.45, green: 0.69, blue: 0.79)
         }
     }
 
