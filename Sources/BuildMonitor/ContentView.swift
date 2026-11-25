@@ -328,7 +328,7 @@ struct NotificationsView: View {
             VStack(spacing: 14) {
                 Image(systemName: "bell.badge").font(.system(size: 42, weight: .light)).foregroundStyle(Palette.blue)
                 Text("构建通知").font(.system(size: 22, weight: .bold)).foregroundStyle(Palette.ink)
-                Text("本阶段已接入手动刷新和实时构建状态读取。系统推送通知会在后续阶段加入。")
+                Text("开启设置中的构建通知后，状态变化会发送本地通知。App 前台每 60 秒同步；后台刷新由 iOS 按系统策略择机执行。")
                     .font(.system(size: 14)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center).padding(.horizontal, 30)
             }
         }

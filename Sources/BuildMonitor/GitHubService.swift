@@ -1,6 +1,8 @@
+import BackgroundTasks
 import Foundation
 import Security
 import SwiftUI
+import UserNotifications
 
 struct GitHubUser: Decodable {
     let login: String
