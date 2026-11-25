@@ -1,0 +1,59 @@
+name: Build Monitor iOS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Sources/**"
+      - "project.yml"
+      - ".github/workflows/ios-build.yml"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and package unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Show Xcode
+        run: xcodebuild -version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate --spec project.yml
+      - name: Build simulator
+        run: |
+          xcodebuild -project BuildMonitor.xcodeproj -scheme BuildMonitor -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build
+      - name: Build iPhone device
+        run: |
+          set -euo pipefail
+          xcodebuild -project BuildMonitor.xcodeproj -scheme BuildMonitor -sdk iphoneos -destination 'generic/platform=iOS' -configuration Release -derivedDataPath build/DeviceDerivedData CODE_SIGNING_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          APP_PATH="build/DeviceDerivedData/Build/Products/Release-iphoneos/BuildMonitor.app"
+          test -d "$APP_PATH"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist"
+          mkdir -p build/ipa-package/Payload
+          cp -R "$APP_PATH" "build/ipa-package/Payload/BuildMonitor.app"
+          cd build/ipa-package
+          /usr/bin/zip -qry "$GITHUB_WORKSPACE/BuildMonitor-unsigned.ipa" Payload
+          cd "$GITHUB_WORKSPACE"
+          shasum -a 256 BuildMonitor-unsigned.ipa > BuildMonitor-unsigned.ipa.sha256
+          test -s BuildMonitor-unsigned.ipa
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: BuildMonitor-unsigned-IPA
+          path: |
+            BuildMonitor-unsigned.ipa
+            BuildMonitor-unsigned.ipa.sha256
+          if-no-files-found: error
+          retention-days: 14
