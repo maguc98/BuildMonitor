@@ -53,7 +53,7 @@ struct AppBackground: View {
 extension View {
     func motionAppear(_ delay: Double = 0) -> some View {
         self.transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.96)).combined(with: .move(edge: .bottom)), removal: .opacity.combined(with: .scale(scale: 0.98))))
-            .animation(.spring(response: 0.48, dampingFraction: 0.78).delay(delay), value: UUID())
+            .animation(.spring(response: 0.48, dampingFraction: 0.78).delay(delay), value: delay)
     }
 
     func glassCard(_ radius: CGFloat = 22) -> some View {
