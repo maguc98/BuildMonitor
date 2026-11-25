@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct RootTabView: View {
+    @StateObject private var store = BuildMonitorStore()
     var body: some View {
         TabView {
             NavigationStack { DashboardView() }
@@ -15,6 +16,8 @@ struct RootTabView: View {
         .tint(Palette.blue)
         .toolbarBackground(.visible, for: .tabBar)
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        .environmentObject(store)
+        .task { await store.restoreSession() }
     }
 }
 
@@ -28,8 +31,7 @@ struct AppBackground: View {
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
+        ).ignoresSafeArea()
     }
 }
 
@@ -57,20 +59,6 @@ struct AppMark: View {
     }
 }
 
-struct DemoNotice: View {
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "info.circle.fill").foregroundStyle(Palette.blue)
-            Text("演示数据 · GitHub 实时连接将在下一阶段接入")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Palette.secondary)
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .background(Palette.blue.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
-    }
-}
-
 struct StatusPill: View {
     let status: BuildStatus
     var body: some View {
@@ -85,9 +73,27 @@ struct StatusPill: View {
     }
 }
 
+struct InfoNotice: View {
+    let text: String
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "info.circle.fill").foregroundStyle(Palette.blue)
+            Text(text).font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Palette.blue.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+    }
+}
+
 struct DashboardView: View {
-    private let projects = RepositoryProject.samples
+    @EnvironmentObject private var store: BuildMonitorStore
+    @State private var showConnection = false
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+    private var recentRuns: [RepositoryRun] { store.allRecentRuns }
+    private func count(_ status: BuildStatus) -> String {
+        String(recentRuns.filter { $0.run.buildStatus == status }.count)
+    }
 
     var body: some View {
         ZStack {
@@ -95,36 +101,54 @@ struct DashboardView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
                     header
-                    DemoNotice()
-                    LazyVGrid(columns: columns, spacing: 8) {
-                        SummaryTile(value: "28", title: "成功", icon: "checkmark.circle.fill", tint: Palette.success)
-                        SummaryTile(value: "3", title: "构建中", icon: "arrow.triangle.2.circlepath", tint: Palette.blue)
-                        SummaryTile(value: "1", title: "排队中", icon: "hourglass", tint: Palette.purple)
-                        SummaryTile(value: "4", title: "失败", icon: "xmark.circle.fill", tint: Palette.danger)
-                    }
-                    .padding(9)
-                    .glassCard(25)
-                    HStack {
-                        Text("我的项目").font(.system(size: 21, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
-                        Text("6").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.secondary)
-                        Spacer()
-                        Image(systemName: "line.3.horizontal.decrease").foregroundStyle(Palette.ink)
-                    }
-                    VStack(spacing: 12) {
-                        ForEach(projects) { project in
-                            NavigationLink { RunDetailView(project: project) } label: {
-                                ProjectCard(project: project)
+                    if !store.isConnected {
+                        connectPrompt
+                    } else {
+                        if let error = store.errorMessage { InfoNotice(text: error) }
+                        LazyVGrid(columns: columns, spacing: 8) {
+                            SummaryTile(value: count(.success), title: "成功", icon: "checkmark.circle.fill", tint: Palette.success)
+                            SummaryTile(value: count(.inProgress), title: "构建中", icon: "arrow.triangle.2.circlepath", tint: Palette.blue)
+                            SummaryTile(value: count(.queued), title: "排队中", icon: "hourglass", tint: Palette.purple)
+                            SummaryTile(value: count(.failed), title: "失败", icon: "xmark.circle.fill", tint: Palette.danger)
+                        }
+                        .padding(9).glassCard(25)
+                        HStack {
+                            Text("我的项目").font(.system(size: 21, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
+                            Text("\(store.repositories.count)").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.secondary)
+                            Spacer()
+                            if store.isLoading { ProgressView().tint(Palette.blue) }
+                            else {
+                                Button { Task { await store.refresh() } } label: {
+                                    Image(systemName: "arrow.clockwise").foregroundStyle(Palette.ink)
+                                }
                             }
-                            .buttonStyle(.plain)
+                        }
+                        if store.repositories.isEmpty && !store.isLoading {
+                            ContentUnavailableView("没有仓库", systemImage: "tray", description: Text("检查 Token 是否具有 Metadata 读取权限。"))
+                        } else {
+                            VStack(spacing: 12) {
+                                ForEach(store.repositories) { repository in
+                                    RepositoryCard(repository: repository, run: store.latestRun(for: repository.fullName))
+                                }
+                            }
+                        }
+                        if let refreshed = store.lastRefreshed {
+                            Text("最后同步：\(refreshed.formatted(date: .omitted, time: .shortened)) · 最近同步前 40 个仓库的 Actions")
+                                .font(.system(size: 10)).foregroundStyle(Palette.secondary).frame(maxWidth: .infinity)
                         }
                     }
                 }
-                .padding(.horizontal, 18)
-                .padding(.top, 12)
-                .padding(.bottom, 28)
+                .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 28)
             }
+            .refreshable { await store.refresh() }
         }
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showConnection) {
+            TokenConnectionView()
+                .environmentObject(store)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     private var header: some View {
@@ -135,16 +159,31 @@ struct DashboardView: View {
                 Text("GitHub 构建监控").font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.secondary)
             }
             Spacer()
-            Button {} label: {
+            Button { showConnection = true } label: {
                 Image(systemName: "plus").font(.system(size: 21, weight: .medium)).foregroundStyle(Palette.ink).frame(width: 35, height: 42)
             }
             Menu {
-                Button("刷新状态", systemImage: "arrow.clockwise") {}
-                Button("排序项目", systemImage: "line.3.horizontal.decrease") {}
+                Button("刷新状态", systemImage: "arrow.clockwise") { Task { await store.refresh() } }
+                Button("连接 GitHub", systemImage: "person.crop.circle.badge.plus") { showConnection = true }
             } label: {
                 Image(systemName: "ellipsis").font(.system(size: 20, weight: .semibold)).foregroundStyle(Palette.ink).frame(width: 30, height: 42)
             }
         }
+    }
+
+    private var connectPrompt: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "person.crop.circle.badge.checkmark").font(.system(size: 42, weight: .light)).foregroundStyle(Palette.blue)
+            Text("连接 GitHub 开始监控").font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
+            Text("授权后自动读取你有权限访问的仓库和 Actions 构建记录。Token 只保存在这台 iPhone 的钥匙串中。")
+                .font(.system(size: 13)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
+            Button { showConnection = true } label: {
+                Label("连接 GitHub", systemImage: "link")
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 20).padding(.vertical, 12).background(Palette.blue, in: Capsule())
+            }
+        }
+        .frame(maxWidth: .infinity).padding(22).glassCard(24)
     }
 }
 
@@ -159,82 +198,106 @@ private struct SummaryTile: View {
             Text(value).font(.system(size: 23, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
             Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity).padding(.vertical, 12)
         .background(tint.opacity(0.075), in: RoundedRectangle(cornerRadius: 17))
     }
 }
 
-private struct ProjectCard: View {
-    let project: RepositoryProject
-
+private struct RepositoryCard: View {
+    let repository: GitHubRepository
+    let run: WorkflowRun?
     private var tint: Color {
-        switch project.initials {
-        case "H": return Color(red: 0.31, green: 0.52, blue: 0.98)
-        case "L": return Palette.purple
-        case "M": return Color(red: 0.27, green: 0.78, blue: 0.68)
-        case "Y": return Color(red: 0.96, green: 0.38, blue: 0.67)
-        case "T": return Color(red: 0.27, green: 0.68, blue: 0.95)
-        default: return Color(red: 0.45, green: 0.69, blue: 0.79)
-        }
+        let palette: [Color] = [Palette.blue, Palette.purple, Palette.success, .pink, .cyan, .orange]
+        return palette[Int(UInt(bitPattern: repository.name.hashValue) % UInt(palette.count))]
     }
 
     var body: some View {
+        Group {
+            if let run {
+                NavigationLink { RunDetailView(repository: repository, run: run) } label: { cardBody }
+                    .buttonStyle(.plain)
+            } else { cardBody }
+        }
+    }
+
+    private var cardBody: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 11) {
-                Text(project.initials)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                Text(String(repository.name.prefix(1)).uppercased())
+                    .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(.white)
                     .frame(width: 42, height: 42)
                     .background(LinearGradient(colors: [tint.opacity(0.72), tint], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 13))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(project.id.split(separator: "/").last.map(String.init) ?? project.id)
-                        .font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink).lineLimit(1)
-                    Text(project.id).font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary).lineLimit(1)
+                    Text(repository.name).font(.system(size: 16, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink).lineLimit(1)
+                    HStack(spacing: 5) {
+                        Text(repository.fullName)
+                        if repository.isPrivate { Image(systemName: "lock.fill") }
+                    }.font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 2)
-                StatusPill(status: project.status)
-            }
-            HStack {
-                Text(project.workflow).font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.ink).lineLimit(1)
-                Spacer()
-                Text(project.updated).font(.system(size: 11)).foregroundStyle(Palette.secondary)
-            }
-            if project.status == .inProgress {
-                ProgressView(value: project.progress).tint(Palette.blue)
-            } else {
-                HStack {
-                    Text(project.detail).font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.secondary)
-                    Spacer()
-                    if project.status == .failed {
-                        Text("查看日志").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.blue)
-                    }
+                if let run { StatusPill(status: run.buildStatus) }
+                else {
+                    Text("暂无记录").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.secondary)
+                        .padding(.horizontal, 9).padding(.vertical, 7).background(Palette.line.opacity(0.25), in: Capsule())
                 }
             }
+            HStack {
+                Text(run?.title ?? "尚未发现 Actions 运行记录").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.ink).lineLimit(1)
+                Spacer()
+                if let run { Text("#\(run.runNumber)").font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary) }
+            }
+            if let run, run.status == "in_progress" {
+                ProgressView().tint(Palette.blue)
+            } else {
+                HStack {
+                    if let run { Text("\(run.headBranch) · \(run.shortSHA)") }
+                    else { Text("默认分支：\(repository.defaultBranch)") }
+                    Spacer()
+                    Text(run.map { RelativeDateTimeFormatter.localized($0.updatedAt) } ?? RelativeDateTimeFormatter.localized(repository.updatedAt))
+                }
+                .font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
+            }
         }
-        .padding(14)
-        .glassCard(21)
+        .padding(14).glassCard(21)
+    }
+}
+
+extension RelativeDateTimeFormatter {
+    static func localized(_ value: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        guard let date = formatter.date(from: value) else { return value }
+        let relative = RelativeDateTimeFormatter()
+        relative.locale = Locale(identifier: "zh_CN")
+        return relative.localizedString(for: date, relativeTo: Date())
     }
 }
 
 struct HistoryView: View {
+    @EnvironmentObject private var store: BuildMonitorStore
     var body: some View {
         ZStack {
             AppBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("构建历史").font(.system(size: 27, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
-                    DemoNotice()
-                    ForEach(RepositoryProject.samples) { p in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(p.id).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
-                                Text(p.workflow + " · " + p.updated).font(.system(size: 11)).foregroundStyle(Palette.secondary)
-                            }
-                            Spacer()
-                            StatusPill(status: p.status)
+                    if !store.isConnected {
+                        Text("连接 GitHub 后，这里会显示各仓库最近的 Actions 运行记录。").font(.system(size: 13)).foregroundStyle(Palette.secondary)
+                    } else if store.allRecentRuns.isEmpty {
+                        ContentUnavailableView("暂无构建记录", systemImage: "clock", description: Text("仓库还没有可读取的 Actions 运行记录。"))
+                    } else {
+                        ForEach(store.allRecentRuns) { item in
+                            NavigationLink { RunDetailView(repository: item.repository, run: item.run) } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text(item.repository.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
+                                        Text(item.run.title + " · #\(item.run.runNumber)").font(.system(size: 11)).foregroundStyle(Palette.secondary)
+                                        Text("\(item.run.headBranch) · \(item.run.shortSHA) · \(RelativeDateTimeFormatter.localized(item.run.updatedAt))").font(.system(size: 10)).foregroundStyle(Palette.secondary)
+                                    }
+                                    Spacer()
+                                    StatusPill(status: item.run.buildStatus)
+                                }.padding(14).glassCard(18)
+                            }.buttonStyle(.plain)
                         }
-                        .padding(14).glassCard(18)
                     }
                 }.padding(18)
             }
@@ -250,9 +313,8 @@ struct NotificationsView: View {
             VStack(spacing: 14) {
                 Image(systemName: "bell.badge").font(.system(size: 42, weight: .light)).foregroundStyle(Palette.blue)
                 Text("构建通知").font(.system(size: 22, weight: .bold)).foregroundStyle(Palette.ink)
-                Text("接入 GitHub 后，这里会显示构建成功、失败和 IPA 产物通知。")
+                Text("本阶段已接入手动刷新和实时构建状态读取。系统推送通知会在后续阶段加入。")
                     .font(.system(size: 14)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center).padding(.horizontal, 30)
-                DemoNotice().padding(.horizontal, 20)
             }
         }
         .navigationTitle("通知").navigationBarTitleDisplayMode(.inline)
@@ -260,10 +322,8 @@ struct NotificationsView: View {
 }
 
 struct SettingsView: View {
-    @State private var successNotice = true
-    @State private var failureNotice = true
-    @State private var interval = "实时"
-
+    @EnvironmentObject private var store: BuildMonitorStore
+    @State private var showConnection = false
     var body: some View {
         ZStack {
             AppBackground()
@@ -274,68 +334,119 @@ struct SettingsView: View {
                         Image(systemName: "person.crop.circle.fill").font(.system(size: 29)).frame(width: 43, height: 43).background(Color.white.opacity(0.8), in: RoundedRectangle(cornerRadius: 13))
                         VStack(alignment: .leading, spacing: 3) {
                             Text("GitHub 账户").font(.system(size: 14, weight: .bold)).foregroundStyle(Palette.ink)
-                            Text("尚未连接").font(.system(size: 11)).foregroundStyle(Palette.secondary)
+                            Text(store.username.map { "@\($0)" } ?? "尚未连接").font(.system(size: 11)).foregroundStyle(Palette.secondary)
                         }
                         Spacer()
-                        Text("待接入").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.blue).padding(9).background(Palette.blue.opacity(0.09), in: Capsule())
-                    }
-                    .padding(15).glassCard(20)
+                        Button(store.isConnected ? "断开" : "连接") {
+                            if store.isConnected { store.disconnect() } else { showConnection = true }
+                        }
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(store.isConnected ? Palette.danger : Palette.blue)
+                    }.padding(15).glassCard(20)
+
                     VStack(spacing: 0) {
-                        SettingRow(icon: "tray.full", title: "管理仓库", value: "6 个仓库")
+                        SettingsRow(icon: "tray.full", title: "管理仓库", value: "\(store.repositories.count) 个仓库")
                         Divider().padding(.leading, 48)
-                        ToggleRow(icon: "bell.badge", title: "构建完成通知", value: $successNotice)
+                        SettingsRow(icon: "checkmark.shield", title: "Token 存储", value: "iOS 钥匙串")
                         Divider().padding(.leading, 48)
-                        ToggleRow(icon: "exclamationmark.bell", title: "构建失败通知", value: $failureNotice)
+                        SettingsRow(icon: "arrow.clockwise", title: "手动同步", value: store.isLoading ? "同步中…" : "立即刷新", action: { Task { await store.refresh() } })
                         Divider().padding(.leading, 48)
-                        HStack {
-                            Label("刷新频率", systemImage: "arrow.clockwise").font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
-                            Spacer()
-                            Picker("刷新频率", selection: $interval) {
-                                Text("实时").tag("实时")
-                                Text("30 秒").tag("30 秒")
-                                Text("1 分钟").tag("1 分钟")
-                                Text("5 分钟").tag("5 分钟")
-                            }.pickerStyle(.menu)
-                        }.padding(14)
+                        SettingsRow(icon: "paintbrush", title: "主题外观", value: "浅色")
                         Divider().padding(.leading, 48)
-                        SettingRow(icon: "paintbrush", title: "主题外观", value: "浅色")
-                        Divider().padding(.leading, 48)
-                        SettingRow(icon: "info.circle", title: "关于", value: "Build Monitor 1.0.0")
+                        SettingsRow(icon: "info.circle", title: "关于", value: "Build Monitor 1.0.0")
                     }.glassCard(21)
-                    Text("GitHub Token 将保存在 iOS 钥匙串中，不会写入项目文件。账号授权和实时数据同步将在下一阶段实现。")
+
+                    Text("建议使用 Fine-grained personal access token，仅授予 Metadata: Read-only 和 Actions: Read-only，并只选择需要监控的仓库。Token 不会写入源码或 UserDefaults。")
                         .font(.system(size: 11)).foregroundStyle(Palette.secondary).padding(.horizontal, 4)
+                    if let error = store.errorMessage {
+                        Text(error).font(.system(size: 12)).foregroundStyle(Palette.danger)
+                    }
                 }.padding(18)
             }
         }
         .navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showConnection) {
+            TokenConnectionView().environmentObject(store)
+                .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+        }
     }
 }
 
-private struct SettingRow: View {
+private struct SettingsRow: View {
     let icon: String
     let title: String
     let value: String
+    var action: (() -> Void)? = nil
     var body: some View {
-        HStack {
-            Image(systemName: icon).foregroundStyle(Palette.blue).frame(width: 24)
-            Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
-            Spacer()
-            Text(value).font(.system(size: 11)).foregroundStyle(Palette.secondary)
-            Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Palette.secondary)
-        }.padding(14)
+        Button { action?() } label: {
+            HStack {
+                Image(systemName: icon).foregroundStyle(Palette.blue).frame(width: 24)
+                Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
+                Spacer()
+                Text(value).font(.system(size: 11)).foregroundStyle(Palette.secondary)
+                if action != nil { Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Palette.secondary) }
+            }.padding(14)
+        }.buttonStyle(.plain).disabled(action == nil)
     }
 }
 
-private struct ToggleRow: View {
-    let icon: String
-    let title: String
-    @Binding var value: Bool
+struct TokenConnectionView: View {
+    @EnvironmentObject private var store: BuildMonitorStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var token = ""
+    @State private var isConnecting = false
+    @State private var errorMessage: String?
+
     var body: some View {
-        HStack {
-            Image(systemName: icon).foregroundStyle(Palette.blue).frame(width: 24)
-            Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
-            Spacer()
-            Toggle(title, isOn: $value).labelsHidden().tint(Palette.blue)
-        }.padding(14)
+        NavigationStack {
+            ZStack {
+                AppBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("连接 GitHub").font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
+                        Text("粘贴一个 Fine-grained personal access token。它只会保存在这台 iPhone 的钥匙串中。")
+                            .font(.system(size: 13)).foregroundStyle(Palette.secondary)
+                        SecureField("github_pat_…", text: $token)
+                            .textContentType(.password).textInputAutocapitalization(.never).autocorrectionDisabled()
+                            .padding(14).background(Color.white.opacity(0.75), in: RoundedRectangle(cornerRadius: 15))
+                            .overlay(RoundedRectangle(cornerRadius: 15).stroke(Color.white, lineWidth: 1))
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text("所需最小权限").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.ink)
+                            Text("• Repository access：选择需要监控的仓库")
+                            Text("• Metadata：Read-only")
+                            Text("• Actions：Read-only")
+                        }
+                        .font(.system(size: 12)).foregroundStyle(Palette.secondary).padding(14).glassCard(16)
+                        Link(destination: URL(string: "https://github.com/settings/personal-access-tokens/new")!) {
+                            Label("创建 Fine-grained Token", systemImage: "arrow.up.right").font(.system(size: 12, weight: .semibold))
+                        }.foregroundStyle(Palette.blue)
+                        if let errorMessage { Text(errorMessage).font(.system(size: 12)).foregroundStyle(Palette.danger) }
+                        Button {
+                            Task {
+                                isConnecting = true
+                                errorMessage = nil
+                                do {
+                                    try await store.connect(token: token)
+                                    dismiss()
+                                } catch {
+                                    errorMessage = error.localizedDescription
+                                }
+                                isConnecting = false
+                            }
+                        } label: {
+                            HStack {
+                                if isConnecting { ProgressView().tint(.white) }
+                                Text(isConnecting ? "正在验证…" : "验证并连接").font(.system(size: 14, weight: .semibold))
+                            }
+                            .foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, 14)
+                            .background(token.isEmpty || isConnecting ? Palette.blue.opacity(0.45) : Palette.blue, in: Capsule())
+                        }.disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isConnecting)
+                    }.padding(20)
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { Button("关闭") { dismiss() } }
+            }
+        }
     }
 }
