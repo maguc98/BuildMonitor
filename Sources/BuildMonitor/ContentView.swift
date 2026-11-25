@@ -187,7 +187,6 @@ struct StatusPill: View {
         .padding(.horizontal, 9)
         .padding(.vertical, 7)
         .background(status.color.opacity(0.10), in: Capsule())
-        .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.78), value: status)
     }
 }
 
@@ -401,7 +400,7 @@ private struct RepositoryCard: View {
                             Button(role: .destructive) {
                                 Task { await cancel(activeRun) }
                             } label: {
-                                Label("取消 #\\(activeRun.runNumber) · \\(activeRun.title)", systemImage: "stop.circle")
+                                Label("取消 #\(activeRun.runNumber) · \(activeRun.title)", systemImage: "stop.circle")
                             }
                             .disabled(cancelingRunID != nil)
                         }
