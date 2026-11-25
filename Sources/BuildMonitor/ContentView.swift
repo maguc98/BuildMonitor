@@ -438,7 +438,7 @@ private struct RepositoryCard: View {
             }
             .padding(.horizontal, 5)
         }
-        .sheet(isPresented: $showWorkflowPicker, onDismiss: { Task { await store.refresh() } }) {
+        .sheet(isPresented: $showWorkflowPicker) {
             WorkflowLaunchSheet(repository: repository)
                 .environmentObject(store)
                 .presentationDetents([.medium, .large])
@@ -555,11 +555,15 @@ private struct RepositoryCard: View {
         }
     }
 
+    private var activeGroupStatus: BuildStatus {
+        activeRuns.contains { $0.status == "in_progress" } ? .inProgress : .queued
+    }
+
     private var activeRunsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                StatusGlyph(status: .inProgress, size: 11)
-                Text("\(activeRuns.count) 个构建正在运行")
+                StatusGlyph(status: activeGroupStatus, size: 11)
+                Text("\(activeRuns.count) 个活动构建")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Palette.blue)
             }
