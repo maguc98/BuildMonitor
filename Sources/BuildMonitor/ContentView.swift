@@ -333,7 +333,7 @@ private struct RepositoryCard: View {
     private var cardBody: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 11) {
-                Text(String(repository.name.prefix(1)).uppercased())
+                Text(String(displayName.prefix(1)).uppercased())
                     .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(.white)
                     .frame(width: 42, height: 42)
                     .background(LinearGradient(colors: [tint.opacity(0.72), tint], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 13))
