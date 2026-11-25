@@ -25,7 +25,6 @@ struct GitHubRepository: Decodable, Identifiable, Hashable {
         case htmlURL = "html_url"
         case defaultBranch = "default_branch"
         case updatedAt = "updated_at"
-        case runStartedAt = "run_started_at"
     }
 }
 
@@ -66,6 +65,7 @@ struct WorkflowRun: Decodable, Identifiable, Hashable {
         case headSHA = "head_sha"
         case htmlURL = "html_url"
         case createdAt = "created_at"
+        case runStartedAt = "run_started_at"
         case updatedAt = "updated_at"
     }
     var buildStatus: BuildStatus {
