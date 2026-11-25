@@ -323,6 +323,11 @@ final class BuildMonitorStore: ObservableObject {
         runsByRepository[repository]?.first
     }
 
+    func activeRuns(for repository: String) -> [WorkflowRun] {
+        (runsByRepository[repository] ?? []).filter { $0.status == "in_progress" || $0.buildStatus == .queued }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
     func displayName(for repository: GitHubRepository) -> String {
         repositoryDisplayNames[repository.fullName] ?? repository.name
     }
