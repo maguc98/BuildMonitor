@@ -529,7 +529,7 @@ private struct RepositoryCard: View {
                 .lineLimit(1)
             Spacer()
             if let run {
-                Text("#\\(run.runNumber)")
+                Text("#\(run.runNumber)")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Palette.secondary)
             }
@@ -543,9 +543,9 @@ private struct RepositoryCard: View {
         } else {
             HStack {
                 if let run {
-                    Text("\\(run.headBranch) · \\(run.shortSHA)")
+                    Text("\(run.headBranch) · \(run.shortSHA)")
                 } else {
-                    Text("默认分支：\\(repository.defaultBranch)")
+                    Text("默认分支：\(repository.defaultBranch)")
                 }
                 Spacer()
                 Text(run.map { RelativeDateTimeFormatter.localized($0.updatedAt) } ?? RelativeDateTimeFormatter.localized(repository.updatedAt))
@@ -559,7 +559,7 @@ private struct RepositoryCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 StatusGlyph(status: .inProgress, size: 11)
-                Text("\\(activeRuns.count) 个构建正在运行")
+                Text("\(activeRuns.count) 个构建正在运行")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Palette.blue)
             }
@@ -577,7 +577,7 @@ private struct RepositoryCard: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1)
-                Text("#\\(activeRun.runNumber) · \\(activeRun.headBranch) · \\(activeRun.shortSHA)")
+                Text("#\(activeRun.runNumber) · \(activeRun.headBranch) · \(activeRun.shortSHA)")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(Palette.secondary)
                     .lineLimit(1)
@@ -966,8 +966,8 @@ struct HistoryView: View {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 5) {
                                         Text(store.displayName(for: item.repository)).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
-                                        Text(item.run.title + " · #\\(item.run.runNumber)").font(.system(size: 11)).foregroundStyle(Palette.secondary)
-                                        Text("\\(item.run.headBranch) · \\(item.run.shortSHA) · \\(RelativeDateTimeFormatter.localized(item.run.updatedAt))").font(.system(size: 10)).foregroundStyle(Palette.secondary)
+                                        Text(item.run.title + " · #\(item.run.runNumber)").font(.system(size: 11)).foregroundStyle(Palette.secondary)
+                                        Text("\(item.run.headBranch) · \(item.run.shortSHA) · \(RelativeDateTimeFormatter.localized(item.run.updatedAt))").font(.system(size: 10)).foregroundStyle(Palette.secondary)
                                     }
                                     Spacer()
                                     StatusPill(status: item.run.buildStatus)
