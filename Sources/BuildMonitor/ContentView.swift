@@ -786,7 +786,7 @@ extension RelativeDateTimeFormatter {
 
 struct RepositoryManagementView: View {
     @EnvironmentObject private var store: BuildMonitorStore
-    @Environment(\\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var dismiss
     @State private var showingHidden = false
     @State private var editingRepository: GitHubRepository?
     @State private var searchText = ""
