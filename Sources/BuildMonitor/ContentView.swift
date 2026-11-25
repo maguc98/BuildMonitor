@@ -2,18 +2,26 @@ import SwiftUI
 
 struct RootTabView: View {
     @StateObject private var store = BuildMonitorStore()
+    @State private var selectedTab = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             NavigationStack { DashboardView() }
-                .tabItem { Label("项目", systemImage: "square.grid.2x2.fill") }
+                .tabItem { Label("项目", systemImage: "square.grid.2x2.fill").symbolEffect(.bounce, value: selectedTab == 0 && !reduceMotion) }
+                .tag(0)
             NavigationStack { HistoryView() }
-                .tabItem { Label("历史", systemImage: "clock") }
+                .tabItem { Label("历史", systemImage: "clock").symbolEffect(.bounce, value: selectedTab == 1 && !reduceMotion) }
+                .tag(1)
             NavigationStack { NotificationsView() }
-                .tabItem { Label("通知", systemImage: "bell") }
+                .tabItem { Label("通知", systemImage: "bell").symbolEffect(.bounce, value: selectedTab == 2 && !reduceMotion) }
+                .tag(2)
             NavigationStack { SettingsView() }
-                .tabItem { Label("设置", systemImage: "gearshape") }
+                .tabItem { Label("设置", systemImage: "gearshape").symbolEffect(.bounce, value: selectedTab == 3 && !reduceMotion) }
+                .tag(3)
         }
+        .buttonStyle(AppPressableButtonStyle())
+        .sensoryFeedback(.selection, trigger: selectedTab)
         .tint(Palette.blue)
         .toolbarBackground(.visible, for: .tabBar)
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
@@ -50,10 +58,49 @@ struct AppBackground: View {
     }
 }
 
+private struct MotionAppearModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isVisible = false
+    let delay: Double
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible || reduceMotion ? 1 : 0)
+            .scaleEffect(isVisible || reduceMotion ? 1 : 0.975)
+            .offset(y: isVisible || reduceMotion ? 0 : 14)
+            .onAppear {
+                guard !isVisible else { return }
+                if reduceMotion {
+                    isVisible = true
+                } else {
+                    withAnimation(.spring(response: 0.56, dampingFraction: 0.84).delay(max(0, delay))) {
+                        isVisible = true
+                    }
+                }
+            }
+            .onChange(of: reduceMotion) { _, isReduced in
+                if isReduced { isVisible = true }
+            }
+    }
+}
+
+struct AppPressableButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.965 : 1)
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.62),
+                value: configuration.isPressed
+            )
+    }
+}
+
 extension View {
     func motionAppear(_ delay: Double = 0) -> some View {
-        self.transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.96)).combined(with: .move(edge: .bottom)), removal: .opacity.combined(with: .scale(scale: 0.98))))
-            .animation(.spring(response: 0.48, dampingFraction: 0.78).delay(delay), value: delay)
+        modifier(MotionAppearModifier(delay: delay))
     }
 
     func glassCard(_ radius: CGFloat = 22) -> some View {
@@ -80,16 +127,20 @@ struct AppMark: View {
 }
 
 struct StatusPill: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let status: BuildStatus
     var body: some View {
         HStack(spacing: 5) {
-            Image(systemName: status.symbol).font(.system(size: 12, weight: .bold))
+            Image(systemName: status.symbol)
+                .font(.system(size: 12, weight: .bold))
+                .symbolEffect(.pulse, options: .repeating, isActive: status == .inProgress && !reduceMotion)
             Text(status.title).font(.system(size: 11, weight: .semibold))
         }
         .foregroundStyle(status.color)
         .padding(.horizontal, 9)
         .padding(.vertical, 7)
         .background(status.color.opacity(0.10), in: Capsule())
+        .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.78), value: status)
     }
 }
 
@@ -108,6 +159,7 @@ struct InfoNotice: View {
 
 struct DashboardView: View {
     @EnvironmentObject private var store: BuildMonitorStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showConnection = false
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
     private var recentRuns: [RepositoryRun] { store.allRecentRuns }
@@ -131,7 +183,7 @@ struct DashboardView: View {
                             SummaryTile(value: count(.queued), title: "排队中", icon: "hourglass", tint: Palette.purple)
                             SummaryTile(value: count(.failed), title: "失败", icon: "xmark.circle.fill", tint: Palette.danger)
                         }
-                        .padding(9).glassCard(25)
+                        .padding(9).glassCard(25).motionAppear(0.08)
                         HStack {
                             Text("我的项目").font(.system(size: 21, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
                             Text("\(store.repositories.count)").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.secondary)
@@ -149,6 +201,11 @@ struct DashboardView: View {
                             VStack(spacing: 12) {
                                 ForEach(store.repositories) { repository in
                                     RepositoryCard(repository: repository, run: store.latestRun(for: repository.fullName))
+                                        .motionAppear(Double(store.repositories.firstIndex(where: { $0.id == repository.id }) ?? 0) * 0.045)
+                                        .transition(.asymmetric(
+                                            insertion: .opacity.combined(with: .move(edge: .bottom)).combined(with: .scale(scale: 0.975)),
+                                            removal: .opacity.combined(with: .scale(scale: 0.94))
+                                        ))
                                 }
                             }
                         }
@@ -159,7 +216,10 @@ struct DashboardView: View {
                     }
                 }
                 .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 28)
+                .motionAppear(0.02)
             }
+            .animation(reduceMotion ? nil : .spring(response: 0.46, dampingFraction: 0.84), value: store.repositories.map(\.id))
+            .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.82), value: store.allRecentRuns.map(\.id))
             .refreshable { await store.refresh() }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -203,11 +263,12 @@ struct DashboardView: View {
                     .padding(.horizontal, 20).padding(.vertical, 12).background(Palette.blue, in: Capsule())
             }
         }
-        .frame(maxWidth: .infinity).padding(22).glassCard(24)
+        .frame(maxWidth: .infinity).padding(22).glassCard(24).motionAppear(0.08)
     }
 }
 
 private struct SummaryTile: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let value: String
     let title: String
     let icon: String
@@ -215,7 +276,11 @@ private struct SummaryTile: View {
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: icon).font(.system(size: 22, weight: .semibold)).foregroundStyle(tint).frame(height: 27)
-            Text(value).font(.system(size: 23, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
+            Text(value)
+                .font(.system(size: 23, weight: .bold, design: .rounded))
+                .foregroundStyle(Palette.ink)
+                .contentTransition(.numericText())
+                .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.78), value: value)
             Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -235,7 +300,7 @@ private struct RepositoryCard: View {
         Group {
             if let run {
                 NavigationLink { RunDetailView(repository: repository, run: run) } label: { cardBody }
-                    .buttonStyle(.plain)
+                    .buttonStyle(AppPressableButtonStyle())
             } else { cardBody }
         }
     }
@@ -294,6 +359,7 @@ extension RelativeDateTimeFormatter {
 
 struct HistoryView: View {
     @EnvironmentObject private var store: BuildMonitorStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showRestore = false
     @State private var deletingID: String?
     var body: some View {
@@ -327,7 +393,8 @@ struct HistoryView: View {
                                     StatusPill(status: item.run.buildStatus)
                                 }.padding(14).glassCard(18)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(AppPressableButtonStyle())
+                            .motionAppear(0.025)
                             .contextMenu {
                                 Button(role: .destructive) { withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) { store.hideHistoryRecord(item) } } label: {
                                     Label("删除此记录", systemImage: "trash")
@@ -341,8 +408,9 @@ struct HistoryView: View {
                             .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .bottom)).combined(with: .scale(scale: 0.96)), removal: .opacity.combined(with: .scale(scale: 0.88))))
                         }
                     }
-                }.padding(18)
+                }.padding(18).motionAppear()
             }
+            .animation(reduceMotion ? nil : .spring(response: 0.44, dampingFraction: 0.82), value: store.allRecentRuns.map(\.id))
         }
         .navigationTitle("历史").navigationBarTitleDisplayMode(.inline)
     }
@@ -358,6 +426,7 @@ struct NotificationsView: View {
                 Text("开启设置中的构建通知后，状态变化会发送本地通知。App 前台每 60 秒同步；后台刷新由 iOS 按系统策略择机执行。")
                     .font(.system(size: 14)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center).padding(.horizontal, 30)
             }
+            .motionAppear(0.04)
         }
         .navigationTitle("通知").navigationBarTitleDisplayMode(.inline)
     }
@@ -387,7 +456,7 @@ struct SettingsView: View {
                         }
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(store.isConnected ? Palette.danger : Palette.blue)
-                    }.padding(15).glassCard(20)
+                    }.padding(15).glassCard(20).motionAppear(0.06)
 
                     VStack(spacing: 0) {
                         SettingsRow(icon: "tray.full", title: "管理仓库", value: "\(store.repositories.count) 个仓库")
@@ -407,14 +476,14 @@ struct SettingsView: View {
                         SettingsRow(icon: "paintbrush", title: "主题外观", value: "浅色")
                         Divider().padding(.leading, 48)
                         SettingsRow(icon: "info.circle", title: "关于", value: "Build Monitor 1.0.0")
-                    }.glassCard(21)
+                    }.glassCard(21).motionAppear(0.12)
 
                     Text("建议使用 Fine-grained personal access token，仅授予 Metadata: Read-only 和 Actions: Read-only，并只选择需要监控的仓库。Token 不会写入源码或 UserDefaults。")
                         .font(.system(size: 11)).foregroundStyle(Palette.secondary).padding(.horizontal, 4)
                     if let error = store.errorMessage {
                         Text(error).font(.system(size: 12)).foregroundStyle(Palette.danger)
                     }
-                }.padding(18)
+                }.padding(18).motionAppear()
             }
         }
         .navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
@@ -472,7 +541,7 @@ private struct SettingsRow: View {
                 Text(value).font(.system(size: 11)).foregroundStyle(Palette.secondary)
                 if action != nil { Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Palette.secondary) }
             }.padding(14)
-        }.buttonStyle(.plain).disabled(action == nil)
+        }.buttonStyle(AppPressableButtonStyle()).disabled(action == nil)
     }
 }
 
@@ -527,7 +596,7 @@ struct TokenConnectionView: View {
                             .foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, 14)
                             .background(token.isEmpty || isConnecting ? Palette.blue.opacity(0.45) : Palette.blue, in: Capsule())
                         }.disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isConnecting)
-                    }.padding(20)
+                    }.padding(20).motionAppear(0.04)
                 }
             }
             .toolbar {

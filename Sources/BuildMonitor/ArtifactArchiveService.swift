@@ -89,6 +89,7 @@ struct ArtifactBrowserView: View {
                 if !item.isDirectory { Text(ByteCountFormatter.string(fromByteCount: item.size, countStyle: .file)).font(.system(size: 10)).foregroundStyle(Palette.secondary) }
             }
         }
+        .motionAppear(0.02)
     }
 
     private func load() {
@@ -127,7 +128,11 @@ struct ArtifactFilePreviewView: View {
         VStack {
             if let text {
                 ScrollView {
-                    Text(text).font(.system(size: 12, design: .monospaced)).frame(maxWidth: .infinity, alignment: .leading).padding()
+                    Text(text)
+                        .font(.system(size: 12, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                        .motionAppear(0.03)
                 }
             } else {
                 ContentUnavailableView("无法预览此文件", systemImage: "doc", description: Text("可使用分享菜单导出到其他 App。"))

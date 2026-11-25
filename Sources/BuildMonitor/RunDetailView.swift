@@ -21,6 +21,7 @@ struct RunDetailView: View {
     @State private var extractedFolderURL: URL?
     @State private var isExtractingArtifactID: Int?
     @State private var artifactError: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -61,14 +62,21 @@ struct RunDetailView: View {
                         .glassCard(15)
                     }
 
-                    switch selectedTab {
-                    case .progress:
-                        progressContent
-                    case .logs:
-                        logsContent
-                    case .artifacts:
-                        artifactsContent
+                    Group {
+                        switch selectedTab {
+                        case .progress:
+                            progressContent
+                        case .logs:
+                            logsContent
+                        case .artifacts:
+                            artifactsContent
+                        }
                     }
+                    .id(selectedTab)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .move(edge: .trailing)),
+                        removal: .opacity.combined(with: .move(edge: .leading))
+                    ))
 
                     if let shareURL {
                         ShareLink(item: shareURL) {
@@ -85,8 +93,10 @@ struct RunDetailView: View {
             .refreshable {
                 await loadDetails()
             }
+            .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.84), value: selectedTab)
         }
         .navigationTitle("构建详情")
+        .sensoryFeedback(.selection, trigger: selectedTab)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -126,6 +136,7 @@ struct RunDetailView: View {
                     .foregroundStyle(Palette.secondary)
             }
         }
+        .motionAppear(0.02)
     }
 
     private var runStatusCard: some View {
@@ -168,6 +179,7 @@ struct RunDetailView: View {
                 .stroke(.white, lineWidth: 1)
         }
         .shadow(color: Palette.blue.opacity(0.08), radius: 14, x: 0, y: 6)
+        .motionAppear(0.08)
     }
 
     private var metadata: some View {
@@ -176,6 +188,7 @@ struct RunDetailView: View {
             MetaChip(icon: "number", text: run.shortSHA)
             MetaChip(icon: "clock", text: RelativeDateTimeFormatter.localized(run.updatedAt))
         }
+        .motionAppear(0.13)
     }
 
     private var progressContent: some View {
@@ -198,6 +211,11 @@ struct RunDetailView: View {
                         Text(job.conclusion ?? job.status)
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(jobStatusColor(job.status, conclusion: job.conclusion))
+                            .contentTransition(.opacity)
+                            .animation(
+                                reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.8),
+                                value: job.status + (job.conclusion ?? "")
+                            )
                     }
 
                     ForEach(job.steps ?? []) { step in
@@ -206,6 +224,7 @@ struct RunDetailView: View {
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(stepColor(step))
                                 .frame(width: 23)
+                                .symbolEffect(.pulse, options: .repeating, isActive: step.status == "in_progress" && !reduceMotion)
 
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(step.name)
@@ -234,6 +253,7 @@ struct RunDetailView: View {
                 }
                 .padding(14)
                 .glassCard(18)
+                .motionAppear(0.025)
             }
         }
     }
@@ -276,6 +296,7 @@ struct RunDetailView: View {
                 }
                 .padding(14)
                 .glassCard(17)
+                .motionAppear(0.025)
             }
 
             if jobs.isEmpty && !isLoading {
@@ -348,7 +369,7 @@ struct RunDetailView: View {
                             }
                         }
                     }
-                }.padding(14).glassCard(18)
+                }.padding(14).glassCard(18).motionAppear(0.025)
             }
             Text("ZIP 会保存在 App 本地；解压后的文件可直接在 App 内浏览、预览文本、分享或导出。")
                 .font(.system(size: 10)).foregroundStyle(Palette.secondary)
