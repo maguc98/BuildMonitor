@@ -122,92 +122,64 @@ struct AppMark: View {
         }
         .frame(width: size, height: size)
         .shadow(color: Palette.blue.opacity(0.22), radius: 12, x: 0, y: 6)
+        .symbolEffect(.pulse, options: .repeating, value: size)
     }
 }
 
 struct StatusGlyph: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var animationActive = false
     let status: BuildStatus
     var size: CGFloat = 14
 
-    private var repeatingAnimation: Animation? {
-        switch status {
-        case .inProgress:
-            return .linear(duration: 1.1).repeatForever(autoreverses: false)
-        case .queued:
-            return .easeInOut(duration: 0.72).repeatForever(autoreverses: true)
-        case .failed:
-            return .easeInOut(duration: 0.85).repeatForever(autoreverses: true)
-        case .success:
-            return nil
-        }
-    }
-
     var body: some View {
-        glyph
-            .foregroundStyle(status.color)
-            .frame(width: size + 9, height: size + 9)
-            .onAppear(perform: startAnimation)
-            .onChange(of: status) { _, _ in startAnimation() }
-            .onChange(of: reduceMotion) { _, _ in startAnimation() }
-            .animation(repeatingAnimation, value: animationActive)
+        Group {
+            if reduceMotion {
+                staticGlyph
+            } else {
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: status == .success)) { timeline in
+                    animatedGlyph(at: timeline.date)
+                }
+            }
+        }
+        .foregroundStyle(status.color)
+        .frame(width: size + 9, height: size + 9)
     }
 
-    @ViewBuilder
-    private var glyph: some View {
+    @ViewBuilder private var staticGlyph: some View {
+        Image(systemName: status.symbol)
+            .font(.system(size: size, weight: .bold))
+    }
+
+    @ViewBuilder private func animatedGlyph(at date: Date) -> some View {
+        let phase = date.timeIntervalSinceReferenceDate
         switch status {
         case .inProgress:
-            runningGlyph
+            ZStack {
+                Circle().stroke(status.color.opacity(0.18), lineWidth: 2)
+                Circle().trim(from: 0, to: 0.30)
+                    .stroke(status.color, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                    .rotationEffect(.degrees((phase.truncatingRemainder(dividingBy: 1.0)) * 360))
+            }
+            .frame(width: size + 7, height: size + 7)
         case .queued:
-            queuedGlyph
-        case .success:
-            successGlyph
-        case .failed:
-            failedGlyph
-        }
-    }
-
-    private var runningGlyph: some View {
-        ZStack {
-            Circle().stroke(status.color.opacity(0.18), lineWidth: 2)
-            Circle()
-                .trim(from: 0, to: 0.30)
-                .stroke(status.color, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
-                .rotationEffect(.degrees(animationActive ? 360 : 0))
-        }
-        .frame(width: size + 7, height: size + 7)
-    }
-
-    private var queuedGlyph: some View {
-        Image(systemName: status.symbol)
-            .font(.system(size: size, weight: .bold))
-            .rotationEffect(.degrees(animationActive ? 180 : 0))
-            .frame(width: size + 7, height: size + 7)
-    }
-
-    private var successGlyph: some View {
-        Image(systemName: status.symbol)
-            .font(.system(size: size, weight: .bold))
-            .symbolEffect(.bounce, value: status)
-            .frame(width: size + 7, height: size + 7)
-    }
-
-    private var failedGlyph: some View {
-        ZStack {
-            Circle()
-                .stroke(status.color.opacity(animationActive ? 0.34 : 0.12), lineWidth: 1.8)
-                .scaleEffect(animationActive ? 1.12 : 0.84)
             Image(systemName: status.symbol)
                 .font(.system(size: size, weight: .bold))
-                .scaleEffect(animationActive ? 1.06 : 0.94)
+                .rotationEffect(.degrees((sin(phase * 2.2) + 1) * 8))
+                .frame(width: size + 7, height: size + 7)
+        case .success:
+            Image(systemName: status.symbol)
+                .font(.system(size: size, weight: .bold))
+                .symbolEffect(.bounce, value: status)
+                .frame(width: size + 7, height: size + 7)
+        case .failed:
+            ZStack {
+                Circle().stroke(status.color.opacity(0.24 + (sin(phase * 3.2) + 1) * 0.10, lineWidth: 1.8)
+                    .scaleEffect(0.94 + (sin(phase * 3.2) + 1) * 0.04)
+                Image(systemName: status.symbol)
+                    .font(.system(size: size, weight: .bold))
+            }
+            .frame(width: size + 7, height: size + 7)
         }
-        .frame(width: size + 7, height: size + 7)
-    }
-
-    private func startAnimation() {
-        let shouldAnimate = !reduceMotion && (status == .inProgress || status == .queued || status == .failed)
-        animationActive = shouldAnimate
     }
 }
 
@@ -326,6 +298,8 @@ struct DashboardView: View {
                 }
                 .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 28)
                 .motionAppear(0.02)
+                .animation(.spring(response: 0.42, dampingFraction: 0.78), value: store.visibleRepositories.count)
+                .animation(.spring(response: 0.42, dampingFraction: 0.78), value: recentRuns.map(\.id))
             }
 
         }
