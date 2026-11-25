@@ -3,8 +3,8 @@ import SwiftUI
 struct RootTabView: View {
     @StateObject private var store = BuildMonitorStore()
     @State private var selectedTab = 0
-    @Environment(\\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     private let tabTitles = ["项目", "历史", "通知", "设置"]
     private let tabIcons = ["square.grid.2x2.fill", "clock", "bell", "gearshape"]
@@ -74,7 +74,7 @@ struct RootTabView: View {
 
     private var tabBar: some View {
         HStack(spacing: 0) {
-            ForEach(0..<tabTitles.count, id: \\.self) { index in
+            ForEach(0..<tabTitles.count, id: \.self) { index in
                 Button {
                     guard selectedTab != index else { return }
                     withAnimation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86)) {
@@ -937,7 +937,7 @@ struct RepositoryManagementView: View {
                 Image(systemName: icon).font(.system(size: 10, weight: .semibold)).foregroundStyle(tint)
                 Text(title).font(.system(size: 10, weight: .medium)).foregroundStyle(Palette.secondary)
             }
-            Text("\\(count)")
+            Text("\(count)")
                 .font(.system(size: 19, weight: .bold, design: .rounded))
                 .foregroundStyle(Palette.ink)
         }
@@ -968,8 +968,8 @@ struct RepositoryManagementView: View {
 
     private var statePicker: some View {
         Picker("仓库状态", selection: $showingHidden.animation(.easeInOut(duration: 0.22))) {
-            Text("显示中 · \\(store.visibleRepositories.count)").tag(false)
-            Text("已隐藏 · \\(store.hiddenRepositories.count)").tag(true)
+            Text("显示中 · \(store.visibleRepositories.count)").tag(false)
+            Text("已隐藏 · \(store.hiddenRepositories.count)").tag(true)
         }
         .pickerStyle(.segmented)
         .padding(4)
@@ -993,7 +993,7 @@ struct RepositoryManagementView: View {
                         .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundStyle(Palette.ink)
                     Spacer()
-                    Text("\\(displayedRepositories.count) 项")
+                    Text("\(displayedRepositories.count) 项")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Palette.secondary)
                 }
