@@ -68,6 +68,14 @@ struct WorkflowRun: Decodable, Identifiable, Hashable {
         case runStartedAt = "run_started_at"
         case updatedAt = "updated_at"
     }
+    static func parseDate(_ value: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: value) { return date }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: value)
+    }
+
     var buildStatus: BuildStatus {
         switch status {
         case "in_progress": return .inProgress
