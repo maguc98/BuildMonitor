@@ -369,7 +369,6 @@ final class BuildMonitorStore: ObservableObject {
         }
         do {
             let fetchedRepositories = try await api.repositories(token: token)
-            repositories = fetchedRepositories
             let targets = Array(fetchedRepositories.prefix(40))
             let client = api
             let results = await withTaskGroup(of: (String, [WorkflowRun]).self) { group in
@@ -387,7 +386,13 @@ final class BuildMonitorStore: ObservableObject {
                 for await value in group { values.append(value) }
                 return values
             }
-            runsByRepository = Dictionary(uniqueKeysWithValues: results)
+            let newRunsByRepository = Dictionary(uniqueKeysWithValues: results)
+            var updateTransaction = Transaction()
+            updateTransaction.animation = nil
+            withTransaction(updateTransaction) {
+                repositories = fetchedRepositories
+                runsByRepository = newRunsByRepository
+            }
 
             let observedRuns = fetchedRepositories.prefix(40).flatMap { repository in
                 (runsByRepository[repository.fullName] ?? []).map {

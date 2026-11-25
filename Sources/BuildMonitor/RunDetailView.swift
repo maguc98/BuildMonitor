@@ -73,10 +73,7 @@ struct RunDetailView: View {
                         }
                     }
                     .id(selectedTab)
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .move(edge: .trailing)),
-                        removal: .opacity.combined(with: .move(edge: .leading))
-                    ))
+                    .transition(.opacity)
 
                     if let shareURL {
                         ShareLink(item: shareURL) {
@@ -93,7 +90,7 @@ struct RunDetailView: View {
             .refreshable {
                 await loadDetails()
             }
-            .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.84), value: selectedTab)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: selectedTab)
         }
         .navigationTitle("构建详情")
         .sensoryFeedback(.selection, trigger: selectedTab)

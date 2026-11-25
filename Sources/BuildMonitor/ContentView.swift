@@ -66,14 +66,13 @@ private struct MotionAppearModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .opacity(isVisible || reduceMotion ? 1 : 0)
-            .scaleEffect(isVisible || reduceMotion ? 1 : 0.975)
-            .offset(y: isVisible || reduceMotion ? 0 : 14)
+            .offset(y: isVisible || reduceMotion ? 0 : 6)
             .onAppear {
                 guard !isVisible else { return }
                 if reduceMotion {
                     isVisible = true
                 } else {
-                    withAnimation(.spring(response: 0.56, dampingFraction: 0.84).delay(max(0, delay))) {
+                    withAnimation(.easeOut(duration: 0.22).delay(min(max(0, delay), 0.08))) {
                         isVisible = true
                     }
                 }
@@ -105,9 +104,9 @@ extension View {
 
     func glassCard(_ radius: CGFloat = 22) -> some View {
         self
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).stroke(.white.opacity(0.8), lineWidth: 1))
-            .shadow(color: Palette.ink.opacity(0.06), radius: 16, x: 0, y: 7)
+            .background(Color.white.opacity(0.82), in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).stroke(.white.opacity(0.72), lineWidth: 0.8))
+            .shadow(color: Palette.ink.opacity(0.035), radius: 7, x: 0, y: 3)
     }
 }
 
@@ -201,7 +200,7 @@ struct DashboardView: View {
                             VStack(spacing: 12) {
                                 ForEach(store.repositories) { repository in
                                     RepositoryCard(repository: repository, run: store.latestRun(for: repository.fullName))
-                                        .motionAppear(Double(store.repositories.firstIndex(where: { $0.id == repository.id }) ?? 0) * 0.045)
+                                        .motionAppear(0)
                                         .transition(.asymmetric(
                                             insertion: .opacity.combined(with: .move(edge: .bottom)).combined(with: .scale(scale: 0.975)),
                                             removal: .opacity.combined(with: .scale(scale: 0.94))
@@ -218,8 +217,8 @@ struct DashboardView: View {
                 .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 28)
                 .motionAppear(0.02)
             }
-            .animation(reduceMotion ? nil : .spring(response: 0.46, dampingFraction: 0.84), value: store.repositories.map(\.id))
-            .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.82), value: store.allRecentRuns.map(\.id))
+
+
             .refreshable { await store.refresh() }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -279,8 +278,6 @@ private struct SummaryTile: View {
             Text(value)
                 .font(.system(size: 23, weight: .bold, design: .rounded))
                 .foregroundStyle(Palette.ink)
-                .contentTransition(.numericText())
-                .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.78), value: value)
             Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -410,7 +407,7 @@ struct HistoryView: View {
                     }
                 }.padding(18).motionAppear()
             }
-            .animation(reduceMotion ? nil : .spring(response: 0.44, dampingFraction: 0.82), value: store.allRecentRuns.map(\.id))
+
         }
         .navigationTitle("历史").navigationBarTitleDisplayMode(.inline)
     }
