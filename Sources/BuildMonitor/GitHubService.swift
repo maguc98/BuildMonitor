@@ -33,6 +33,17 @@ struct WorkflowRunsResponse: Decodable {
     enum CodingKeys: String, CodingKey { case workflowRuns = "workflow_runs" }
 }
 
+struct WorkflowsResponse: Decodable {
+    let workflows: [WorkflowDefinition]
+}
+
+struct WorkflowDefinition: Decodable, Identifiable, Hashable {
+    let id: Int
+    let name: String
+    let path: String
+    let state: String
+}
+
 struct WorkflowRun: Decodable, Identifiable, Hashable {
     let id: Int
     let name: String?
@@ -172,6 +183,33 @@ struct GitHubAPIClient {
         return response.workflowRuns
     }
 
+
+    func workflows(token: String, repository: String) async throws -> [WorkflowDefinition] {
+        let response: WorkflowsResponse = try await get(
+            "/repos/\(repository)/actions/workflows?per_page=100",
+            token: token
+        )
+        return response.workflows
+    }
+
+    func dispatchWorkflow(token: String, repository: String, workflowID: Int, ref: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["ref": ref])
+        _ = try await requestData(
+            "/repos/\(repository)/actions/workflows/\(workflowID)/dispatches",
+            token: token,
+            method: "POST",
+            body: body
+        )
+    }
+
+    func cancelWorkflowRun(token: String, repository: String, runID: Int) async throws {
+        _ = try await requestData(
+            "/repos/\(repository)/actions/runs/\(runID)/cancel",
+            token: token,
+            method: "POST"
+        )
+    }
+
     func jobs(token: String, repository: String, runID: Int) async throws -> [WorkflowJob] {
         let response: WorkflowJobsResponse = try await get(
             "/repos/\(repository)/actions/runs/\(runID)/jobs?per_page=100",
@@ -201,10 +239,11 @@ struct GitHubAPIClient {
         }
     }
 
-    private func requestData(_ path: String, token: String) async throws -> Data {
+    private func requestData(_ path: String, token: String, method: String = "GET", body: Data? = nil) async throws -> Data {
         guard let url = URL(string: baseURL + path) else { throw GitHubAPIError.invalidURL }
         var request = URLRequest(url: url)
-        request.httpMethod = "GET"
+        request.httpMethod = method
+        request.httpBody = body
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
@@ -478,6 +517,24 @@ final class BuildMonitorStore: ObservableObject {
     func stopPolling() {
         pollingTask?.cancel()
         pollingTask = nil
+    }
+
+
+    func availableWorkflows(repository: String) async throws -> [WorkflowDefinition] {
+        guard let token else { throw GitHubAPIError.unauthorized }
+        return try await api.workflows(token: token, repository: repository)
+    }
+
+    func startWorkflow(repository: String, workflowID: Int, ref: String) async throws {
+        guard let token else { throw GitHubAPIError.unauthorized }
+        try await api.dispatchWorkflow(token: token, repository: repository, workflowID: workflowID, ref: ref)
+        await refresh()
+    }
+
+    func cancelWorkflowRun(repository: String, runID: Int) async throws {
+        guard let token else { throw GitHubAPIError.unauthorized }
+        try await api.cancelWorkflowRun(token: token, repository: repository, runID: runID)
+        await refresh()
     }
 
     func loadRunDetails(repository: String, runID: Int) async throws -> (jobs: [WorkflowJob], artifacts: [WorkflowArtifact]) {
