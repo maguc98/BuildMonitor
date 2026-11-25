@@ -160,13 +160,7 @@ struct RunDetailView: View {
                     .foregroundStyle(run.buildStatus.color)
             }
             Spacer(minLength: 4)
-            if run.status == "in_progress" {
-                ProgressView().tint(Palette.blue)
-            } else {
-                Image(systemName: run.buildStatus.symbol)
-                    .font(.system(size: 23, weight: .semibold))
-                    .foregroundStyle(run.buildStatus.color)
-            }
+            StatusGlyph(status: run.buildStatus, size: 23)
         }
         .padding(15)
         .background(
@@ -211,23 +205,18 @@ struct RunDetailView: View {
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(Palette.ink)
                         Spacer()
-                        Text(job.conclusion ?? job.status)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(jobStatusColor(job.status, conclusion: job.conclusion))
-                            .contentTransition(.opacity)
-                            .animation(
-                                reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.8),
-                                value: job.status + (job.conclusion ?? "")
-                            )
+                        HStack(spacing: 5) {
+                            StatusGlyph(status: jobBuildStatus(job.status, conclusion: job.conclusion), size: 9)
+                            Text(job.conclusion ?? job.status)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(jobStatusColor(job.status, conclusion: job.conclusion))
+                        }
                     }
 
                     ForEach(job.steps ?? []) { step in
                         HStack(spacing: 10) {
-                            Image(systemName: stepSymbol(step))
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(stepColor(step))
+                            StatusGlyph(status: stepBuildStatus(step), size: 13)
                                 .frame(width: 23)
-                                .symbolEffect(.pulse, options: .repeating, isActive: step.status == "in_progress" && !reduceMotion)
 
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(step.name)
@@ -424,6 +413,21 @@ struct RunDetailView: View {
             errorMessage = error.localizedDescription
         }
         downloadingArtifactID = nil
+    }
+
+
+    private func stepBuildStatus(_ step: WorkflowJobStep) -> BuildStatus {
+        if step.status == "in_progress" { return .inProgress }
+        if step.status == "queued" { return .queued }
+        if ["failure", "cancelled", "timed_out", "action_required"].contains(step.conclusion ?? "") { return .failed }
+        return .success
+    }
+
+    private func jobBuildStatus(_ status: String, conclusion: String?) -> BuildStatus {
+        if status == "in_progress" { return .inProgress }
+        if status == "queued" { return .queued }
+        if ["failure", "cancelled", "timed_out", "action_required"].contains(conclusion ?? "") { return .failed }
+        return .success
     }
 
     private func stepColor(_ step: WorkflowJobStep) -> Color {
