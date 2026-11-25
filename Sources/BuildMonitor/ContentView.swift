@@ -593,7 +593,7 @@ struct HistoryView: View {
                             NavigationLink { RunDetailView(repository: item.repository, run: item.run) } label: {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 5) {
-                                        Text(item.repository.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
+                                        Text(store.displayName(for: item.repository)).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
                                         Text(item.run.title + " · #\\(item.run.runNumber)").font(.system(size: 11)).foregroundStyle(Palette.secondary)
                                         Text("\\(item.run.headBranch) · \\(item.run.shortSHA) · \\(RelativeDateTimeFormatter.localized(item.run.updatedAt))").font(.system(size: 10)).foregroundStyle(Palette.secondary)
                                     }
