@@ -8,17 +8,24 @@ settings:
     SWIFT_VERSION: 5.9
     IPHONEOS_DEPLOYMENT_TARGET: 17.0
     TARGETED_DEVICE_FAMILY: "1"
-    GENERATE_INFOPLIST_FILE: YES
-    INFOPLIST_KEY_CFBundleDisplayName: Build Monitor
-    INFOPLIST_KEY_UIUserInterfaceStyle: Light
 targets:
   BuildMonitor:
     type: application
     platform: iOS
     sources:
       - path: Sources/BuildMonitor
+    info:
+      path: Sources/BuildMonitor/Info.plist
+      properties:
+        CFBundleDisplayName: Build Monitor
+        UIUserInterfaceStyle: Light
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.maguc98.BuildMonitor.refresh
+        UIBackgroundModes:
+          - fetch
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.maguc98.BuildMonitor
         PRODUCT_NAME: BuildMonitor
         SWIFT_VERSION: 5.9
+        GENERATE_INFOPLIST_FILE: NO

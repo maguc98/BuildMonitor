@@ -41,6 +41,8 @@ jobs:
           APP_PATH="build/DeviceDerivedData/Build/Products/Release-iphoneos/BuildMonitor.app"
           test -d "$APP_PATH"
           /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :BGTaskSchedulerPermittedIdentifiers:0" "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :UIBackgroundModes:0" "$APP_PATH/Info.plist"
           mkdir -p build/ipa-package/Payload
           cp -R "$APP_PATH" "build/ipa-package/Payload/BuildMonitor.app"
           cd build/ipa-package
