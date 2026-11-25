@@ -125,14 +125,62 @@ struct AppMark: View {
     }
 }
 
+struct StatusGlyph: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var animationActive = false
+    let status: BuildStatus
+    var size: CGFloat = 14
+
+    var body: some View {
+        Group {
+            switch status {
+            case .inProgress:
+                ZStack {
+                    Circle()
+                        .stroke(status.color.opacity(0.18), lineWidth: 2)
+                    Circle()
+                        .trim(from: 0, to: 0.30)
+                        .stroke(status.color, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                        .rotationEffect(.degrees(animationActive ? 360 : 0))
+                }
+                .frame(width: size + 7, height: size + 7)
+            case .queued:
+                Image(systemName: status.symbol)
+                    .font(.system(size: size, weight: .bold))
+                    .rotationEffect(.degrees(animationActive ? 180 : 0))
+                    .frame(width: size + 7, height: size + 7)
+            case .success, .failed:
+                Image(systemName: status.symbol)
+                    .font(.system(size: size, weight: .bold))
+                    .symbolEffect(.bounce, value: status)
+                    .frame(width: size + 7, height: size + 7)
+            }
+        }
+        .foregroundStyle(status.color)
+        .frame(width: size + 9, height: size + 9)
+        .onAppear {
+            guard !reduceMotion, status == .inProgress || status == .queued else { return }
+            animationActive = true
+        }
+        .onChange(of: reduceMotion) { _, isReduced in
+            if isReduced { animationActive = false }
+            else if status == .inProgress || status == .queued { animationActive = true }
+        }
+        .animation(
+            status == .inProgress
+                ? .linear(duration: 1.1).repeatForever(autoreverses: false)
+                : .easeInOut(duration: 0.72).repeatForever(autoreverses: true),
+            value: animationActive
+        )
+    }
+}
+
 struct StatusPill: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let status: BuildStatus
     var body: some View {
         HStack(spacing: 5) {
-            Image(systemName: status.symbol)
-                .font(.system(size: 12, weight: .bold))
-                .symbolEffect(.pulse, options: .repeating, isActive: status == .inProgress && !reduceMotion)
+            StatusGlyph(status: status, size: 12)
             Text(status.title).font(.system(size: 11, weight: .semibold))
         }
         .foregroundStyle(status.color)
@@ -178,10 +226,10 @@ struct DashboardView: View {
                     } else {
                         if let error = store.errorMessage { InfoNotice(text: error) }
                         LazyVGrid(columns: columns, spacing: 8) {
-                            SummaryTile(value: count(.success), title: "成功", icon: "checkmark.circle.fill", tint: Palette.success)
-                            SummaryTile(value: count(.inProgress), title: "构建中", icon: "arrow.triangle.2.circlepath", tint: Palette.blue)
-                            SummaryTile(value: count(.queued), title: "排队中", icon: "hourglass", tint: Palette.purple)
-                            SummaryTile(value: count(.failed), title: "失败", icon: "xmark.circle.fill", tint: Palette.danger)
+                            SummaryTile(value: count(.success), title: "成功", icon: "checkmark.circle.fill", tint: Palette.success, status: .success)
+                            SummaryTile(value: count(.inProgress), title: "构建中", icon: "arrow.triangle.2.circlepath", tint: Palette.blue, status: .inProgress)
+                            SummaryTile(value: count(.queued), title: "排队中", icon: "hourglass", tint: Palette.purple, status: .queued)
+                            SummaryTile(value: count(.failed), title: "失败", icon: "xmark.circle.fill", tint: Palette.danger, status: .failed)
                         }
                         .padding(9).glassCard(25).motionAppear(0.08)
                         HStack {
@@ -245,8 +293,6 @@ struct DashboardView: View {
                 .motionAppear(0.02)
             }
 
-
-            .refreshable { await store.refresh() }
         }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showConnection) {
@@ -299,9 +345,10 @@ private struct SummaryTile: View {
     let title: String
     let icon: String
     let tint: Color
+    let status: BuildStatus
     var body: some View {
         VStack(spacing: 8) {
-            Image(systemName: icon).font(.system(size: 22, weight: .semibold)).foregroundStyle(tint).frame(height: 27)
+            StatusGlyph(status: status, size: 21).frame(height: 27)
             Text(value)
                 .font(.system(size: 23, weight: .bold, design: .rounded))
                 .foregroundStyle(Palette.ink)
@@ -323,13 +370,79 @@ private struct RepositoryCard: View {
         return palette[Int(UInt(bitPattern: repository.name.hashValue) % UInt(palette.count))]
     }
 
+    @EnvironmentObject private var store: BuildMonitorStore
+    @State private var showWorkflowPicker = false
+    @State private var cancelingRunID: Int?
+    @State private var actionMessage: String?
+
     var body: some View {
-        Group {
-            if let run {
-                NavigationLink { RunDetailView(repository: repository, run: run) } label: { cardBody }
-                    .buttonStyle(AppPressableButtonStyle())
-            } else { cardBody }
+        VStack(spacing: 9) {
+            Group {
+                if let run {
+                    NavigationLink { RunDetailView(repository: repository, run: run) } label: { cardBody }
+                        .buttonStyle(AppPressableButtonStyle())
+                } else { cardBody }
+            }
+
+            HStack(spacing: 9) {
+                Button {
+                    showWorkflowPicker = true
+                } label: {
+                    Label("启动构建", systemImage: "play.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Palette.blue.opacity(0.10), in: Capsule())
+                        .foregroundStyle(Palette.blue)
+                }
+                if !activeRuns.isEmpty {
+                    Menu {
+                        ForEach(activeRuns) { activeRun in
+                            Button(role: .destructive) {
+                                Task { await cancel(activeRun) }
+                            } label: {
+                                Label("取消 #\\(activeRun.runNumber) · \\(activeRun.title)", systemImage: "stop.circle")
+                            }
+                            .disabled(cancelingRunID != nil)
+                        }
+                    } label: {
+                        Label(cancelingRunID == nil ? "取消构建" : "正在取消", systemImage: "stop.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Palette.danger.opacity(0.09), in: Capsule())
+                            .foregroundStyle(Palette.danger)
+                    }
+                    .disabled(cancelingRunID != nil)
+                }
+            }
+            .padding(.horizontal, 5)
         }
+        .sheet(isPresented: $showWorkflowPicker, onDismiss: { Task { await store.refresh() } }) {
+            WorkflowLaunchSheet(repository: repository)
+                .environmentObject(store)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .alert("构建操作", isPresented: Binding(
+            get: { actionMessage != nil },
+            set: { if !$0 { actionMessage = nil } }
+        )) {
+            Button("好", role: .cancel) { actionMessage = nil }
+        } message: {
+            Text(actionMessage ?? "")
+        }
+    }
+
+    private func cancel(_ activeRun: WorkflowRun) async {
+        cancelingRunID = activeRun.id
+        do {
+            try await store.cancelWorkflowRun(repository: repository.fullName, runID: activeRun.id)
+            actionMessage = "已向 GitHub 发送取消请求。"
+        } catch {
+            actionMessage = error.localizedDescription
+        }
+        cancelingRunID = nil
     }
 
     private var cardBody: some View {
@@ -378,17 +491,14 @@ private struct RepositoryCard: View {
             if activeRuns.count > 1 {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .foregroundStyle(Palette.blue)
+                        StatusGlyph(status: .inProgress, size: 11)
                         Text("\(activeRuns.count) 个构建正在运行")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(Palette.blue)
                     }
                     ForEach(activeRuns) { activeRun in
                         HStack(spacing: 8) {
-                            Circle()
-                                .fill(activeRun.status == "in_progress" ? Palette.blue : Palette.orange)
-                                .frame(width: 6, height: 6)
+                            StatusGlyph(status: activeRun.buildStatus, size: 9)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(activeRun.title)
                                     .font(.system(size: 11, weight: .medium))
@@ -412,6 +522,145 @@ private struct RepositoryCard: View {
             }
         }
         .padding(14).glassCard(21)
+    }
+}
+
+
+private struct WorkflowLaunchSheet: View {
+    @EnvironmentObject private var store: BuildMonitorStore
+    @Environment(\.dismiss) private var dismiss
+    let repository: GitHubRepository
+    @State private var workflows: [WorkflowDefinition] = []
+    @State private var branch: String
+    @State private var isLoading = true
+    @State private var launchingWorkflowID: Int?
+    @State private var errorMessage: String?
+
+    init(repository: GitHubRepository) {
+        self.repository = repository
+        _branch = State(initialValue: repository.defaultBranch)
+    }
+
+    private var activeWorkflows: [WorkflowDefinition] {
+        workflows.filter { $0.state == "active" }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(repository.fullName)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Palette.ink)
+                            Text("选择要手动启动的 GitHub Actions 工作流。")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Palette.secondary)
+                        }
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text("目标分支")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Palette.ink)
+                            TextField("例如 main", text: $branch)
+                                .font(.system(size: 13, weight: .medium))
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .padding(12)
+                                .background(Color.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 13))
+                        }
+                        if let errorMessage {
+                            InfoNotice(text: errorMessage)
+                        }
+                        if isLoading {
+                            HStack(spacing: 9) {
+                                ProgressView().tint(Palette.blue)
+                                Text("正在读取工作流…")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(Palette.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 20)
+                        } else if activeWorkflows.isEmpty {
+                            ContentUnavailableView(
+                                "没有可用的工作流",
+                                systemImage: "workflow",
+                                description: Text("请确认仓库中存在已启用的 GitHub Actions 工作流。")
+                            )
+                        } else {
+                            ForEach(activeWorkflows) { workflow in
+                                Button {
+                                    Task { await launch(workflow) }
+                                } label: {
+                                    HStack(spacing: 11) {
+                                        Image(systemName: launchingWorkflowID == workflow.id ? "hourglass" : "play.circle.fill")
+                                            .font(.system(size: 23, weight: .semibold))
+                                            .foregroundStyle(Palette.blue)
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(workflow.name)
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundStyle(Palette.ink)
+                                            Text(workflow.path)
+                                                .font(.system(size: 10, weight: .medium))
+                                                .foregroundStyle(Palette.secondary)
+                                                .lineLimit(1)
+                                        }
+                                        Spacer()
+                                        if launchingWorkflowID == workflow.id {
+                                            ProgressView().tint(Palette.blue)
+                                        } else {
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 11, weight: .semibold))
+                                                .foregroundStyle(Palette.secondary)
+                                        }
+                                    }
+                                    .padding(13)
+                                    .glassCard(16)
+                                }
+                                .disabled(launchingWorkflowID != nil || branch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                .buttonStyle(AppPressableButtonStyle())
+                            }
+                        }
+                        InfoNotice(text: "启动要求该工作流支持 workflow_dispatch，且 GitHub Token 具有 Actions 写入权限。文字状态保持静止，动画只用于状态图标。")
+                    }
+                    .padding(18)
+                }
+            }
+            .navigationTitle("启动构建")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("关闭") { dismiss() }
+                }
+            }
+            .task { await loadWorkflows() }
+        }
+    }
+
+    private func loadWorkflows() async {
+        isLoading = true
+        do {
+            workflows = try await store.availableWorkflows(repository: repository.fullName)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    private func launch(_ workflow: WorkflowDefinition) async {
+        let selectedBranch = branch.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !selectedBranch.isEmpty else { return }
+        launchingWorkflowID = workflow.id
+        errorMessage = nil
+        do {
+            try await store.startWorkflow(repository: repository.fullName, workflowID: workflow.id, ref: selectedBranch)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        launchingWorkflowID = nil
     }
 }
 
