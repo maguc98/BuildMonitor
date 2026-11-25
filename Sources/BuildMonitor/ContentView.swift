@@ -373,6 +373,42 @@ private struct RepositoryCard: View {
                 }
                 .font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
             }
+            let activeRuns = BuildMonitorStore.shared.activeRuns(for: repository.fullName)
+            if activeRuns.count > 1 {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .foregroundStyle(Palette.blue)
+                        Text("\(activeRuns.count) 个构建正在运行")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Palette.blue)
+                    }
+                    ForEach(activeRuns) { activeRun in
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(activeRun.status == "in_progress" ? Palette.blue : Palette.orange)
+                                .frame(width: 6, height: 6)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(activeRun.title)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(Palette.ink)
+                                    .lineLimit(1)
+                                Text("#\(activeRun.runNumber) · \(activeRun.headBranch) · \(activeRun.shortSHA)")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundStyle(Palette.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 2)
+                            Text(activeRun.status == "in_progress" ? "运行中" : "排队中")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(activeRun.status == "in_progress" ? Palette.blue : Palette.orange)
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 7)
+                        .background(Color.white.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                }
+            }
         }
         .padding(14).glassCard(21)
     }
