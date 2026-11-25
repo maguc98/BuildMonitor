@@ -10,7 +10,7 @@ settings:
     TARGETED_DEVICE_FAMILY: "1"
 packages:
   ZIPFoundation:
-    url: https://github.com/ZipFoundation/ZipFoundation.git
+    url: https://github.com/weichsel/ZIPFoundation.git
     from: 0.9.19
 targets:
   BuildMonitor:

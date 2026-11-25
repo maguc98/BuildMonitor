@@ -51,6 +51,11 @@ struct AppBackground: View {
 }
 
 extension View {
+    func motionAppear(_ delay: Double = 0) -> some View {
+        self.transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.96)).combined(with: .move(edge: .bottom)), removal: .opacity.combined(with: .scale(scale: 0.98))))
+            .animation(.spring(response: 0.48, dampingFraction: 0.78).delay(delay), value: UUID())
+    }
+
     func glassCard(_ radius: CGFloat = 22) -> some View {
         self
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
@@ -289,29 +294,51 @@ extension RelativeDateTimeFormatter {
 
 struct HistoryView: View {
     @EnvironmentObject private var store: BuildMonitorStore
+    @State private var showRestore = false
+    @State private var deletingID: String?
     var body: some View {
         ZStack {
             AppBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("构建历史").font(.system(size: 27, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
+                    HStack {
+                        Text("构建历史").font(.system(size: 27, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
+                        Spacer()
+                        if !store.hiddenRunIDs.isEmpty {
+                            Button("恢复隐藏记录") { store.restoreHiddenHistory() }
+                                .font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.blue)
+                        }
+                    }
                     if !store.isConnected {
-                        Text("连接 GitHub 后，这里会显示各仓库最近的 Actions 运行记录。").font(.system(size: 13)).foregroundStyle(Palette.secondary)
+                        Text("连接 GitHub 后，这里会显示各仓库最近的 Actions 运行记录。")
+                            .font(.system(size: 13)).foregroundStyle(Palette.secondary)
                     } else if store.allRecentRuns.isEmpty {
-                        ContentUnavailableView("暂无构建记录", systemImage: "clock", description: Text("仓库还没有可读取的 Actions 运行记录。"))
+                        ContentUnavailableView("暂无构建记录", systemImage: "clock", description: Text("仓库还没有可读取的 Actions 运行记录，或记录已被隐藏。"))
                     } else {
                         ForEach(store.allRecentRuns) { item in
                             NavigationLink { RunDetailView(repository: item.repository, run: item.run) } label: {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 5) {
                                         Text(item.repository.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
-                                        Text(item.run.title + " · #\(item.run.runNumber)").font(.system(size: 11)).foregroundStyle(Palette.secondary)
-                                        Text("\(item.run.headBranch) · \(item.run.shortSHA) · \(RelativeDateTimeFormatter.localized(item.run.updatedAt))").font(.system(size: 10)).foregroundStyle(Palette.secondary)
+                                        Text(item.run.title + " · #\\(item.run.runNumber)").font(.system(size: 11)).foregroundStyle(Palette.secondary)
+                                        Text("\\(item.run.headBranch) · \\(item.run.shortSHA) · \\(RelativeDateTimeFormatter.localized(item.run.updatedAt))").font(.system(size: 10)).foregroundStyle(Palette.secondary)
                                     }
                                     Spacer()
                                     StatusPill(status: item.run.buildStatus)
                                 }.padding(14).glassCard(18)
-                            }.buttonStyle(.plain)
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button(role: .destructive) { withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) { store.hideHistoryRecord(item) } } label: {
+                                    Label("删除此记录", systemImage: "trash")
+                                }
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) { withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) { store.hideHistoryRecord(item) } } label: {
+                                    Label("删除", systemImage: "trash")
+                                }
+                            }
+                            .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .bottom)).combined(with: .scale(scale: 0.96)), removal: .opacity.combined(with: .scale(scale: 0.88))))
                         }
                     }
                 }.padding(18)

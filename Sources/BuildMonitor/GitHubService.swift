@@ -291,6 +291,7 @@ final class BuildMonitorStore: ObservableObject {
     @Published private(set) var hasLoaded = false
     @Published var errorMessage: String?
     @Published private(set) var lastRefreshed: Date?
+    @Published private(set) var hiddenRunIDs: Set<String> = UserDefaults.standard.stringArray(forKey: "BuildMonitor.hiddenRuns")?.reduce(into: Set<String>()) { $0.insert($1) } ?? []
 
     private let api = GitHubAPIClient()
     private var token: String?
@@ -303,6 +304,7 @@ final class BuildMonitorStore: ObservableObject {
                 RepositoryRun(repository: repository, run: $0)
             }
         }
+        .filter { !hiddenRunIDs.contains($0.id) }
         .sorted { $0.run.createdAt > $1.run.createdAt }
     }
 
@@ -310,6 +312,16 @@ final class BuildMonitorStore: ObservableObject {
         runsByRepository[repository]?.first
     }
 
+
+    func hideHistoryRecord(_ item: RepositoryRun) {
+        hiddenRunIDs.insert(item.id)
+        UserDefaults.standard.set(Array(hiddenRunIDs), forKey: "BuildMonitor.hiddenRuns")
+    }
+
+    func restoreHiddenHistory() {
+        hiddenRunIDs.removeAll()
+        UserDefaults.standard.removeObject(forKey: "BuildMonitor.hiddenRuns")
+    }
     func restoreSession() async {
         guard let savedToken = TokenKeychain.read() else { return }
         token = savedToken
