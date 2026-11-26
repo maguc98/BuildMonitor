@@ -1,4 +1,6 @@
 import SwiftUI
+import UserNotifications
+import UIKit
 
 struct RootTabView: View {
     @StateObject private var store = BuildMonitorStore()
@@ -1462,7 +1464,7 @@ struct NotificationsView: View {
 
                     HStack(spacing: 10) {
                         Image(systemName: permissionGranted ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                            .foregroundStyle(permissionGranted ? Palette.success : Palette.orange)
+                            .foregroundStyle(permissionGranted ? Palette.success : Color.orange)
                         VStack(alignment: .leading, spacing: 3) {
                             Text("系统通知权限").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
                             Text(permissionStatus).font(.system(size: 11)).foregroundStyle(Palette.secondary)
