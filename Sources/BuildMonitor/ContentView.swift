@@ -162,8 +162,16 @@ extension View {
     func glassCard(_ radius: CGFloat = 22) -> some View {
         self
             .background(Color.white.opacity(0.88), in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(LinearGradient(colors: [Color.white.opacity(0.28), Color.white.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing)))
-            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).stroke(.white.opacity(0.82), lineWidth: 1))
+            .overlay {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(LinearGradient(colors: [Color.white.opacity(0.28), Color.white.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .allowsHitTesting(false)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .stroke(.white.opacity(0.82), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
             .shadow(color: Palette.ink.opacity(0.055), radius: 16, x: 0, y: 7)
     }
 }
