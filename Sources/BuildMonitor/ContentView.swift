@@ -300,7 +300,8 @@ struct DashboardView: View {
         }
         return matching.sorted { lhs, rhs in
             @MainActor func priority(_ repository: GitHubRepository) -> Int {
-                switch store.latestRun(for: repository.fullName)?.buildStatus {
+                let effective = store.activeRuns(for: repository.fullName).first ?? store.latestRun(for: repository.fullName)
+                switch effective?.buildStatus {
                 case .failed: return 0
                 case .inProgress: return 1
                 case .queued: return 2
@@ -313,8 +314,9 @@ struct DashboardView: View {
                 let rightPriority = priority(rhs)
                 if leftPriority != rightPriority { return leftPriority < rightPriority }
             }
-            return (store.latestRun(for: lhs.fullName)?.updatedAt ?? "")
-                > (store.latestRun(for: rhs.fullName)?.updatedAt ?? "")
+            let leftDate = store.activeRuns(for: lhs.fullName).first?.updatedAt ?? store.latestRun(for: lhs.fullName)?.updatedAt ?? ""
+            let rightDate = store.activeRuns(for: rhs.fullName).first?.updatedAt ?? store.latestRun(for: rhs.fullName)?.updatedAt ?? ""
+            return leftDate > rightDate
         }
     }
     private var statusCounts: [String: Int] {
@@ -345,7 +347,7 @@ struct DashboardView: View {
                         .padding(8).glassCard(23).motionAppear(0.08)
                         HStack {
                             Text("我的项目").font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
-                            Text("\(store.visibleRepositories.count)/\(store.repositories.count)").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.secondary)
+                            Text("\(store.visibleRepositories.count)/\(store.repositories.count)").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.secondary).contentTransition(.numericText())
                             Spacer()
                             Button {
                                 showRepositoryManagement = true
