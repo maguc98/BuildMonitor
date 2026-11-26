@@ -331,7 +331,7 @@ struct DashboardView: View {
             return matchesQuery && matchesStatus
         }
         return matching.sorted { lhs, rhs in
-            func priority(_ repository: GitHubRepository) -> Int {
+            @MainActor func priority(_ repository: GitHubRepository) -> Int {
                 switch store.latestRun(for: repository.fullName)?.buildStatus {
                 case .failed: return 0
                 case .inProgress: return 1
