@@ -441,20 +441,10 @@ struct DashboardView: View {
                     }
                 }
                 .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 28)
-                .background(GeometryReader { geo in
-                    Color.clear.preference(key: DashboardContentHeightKey.self, value: geo.size.height)
-                })
-                .overlay(alignment: .top) {
-                    GeometryReader { geo in
-                        Color.clear.preference(key: DashboardScrollOffsetKey.self, value: geo.frame(in: .named("dashboardScroll")).minY)
-                    }
-                    .frame(height: 1)
-                }
                 .motionAppear(0.02)
                 .animation(.spring(response: 0.42, dampingFraction: 0.78), value: store.visibleRepositories.count)
                 .animation(.spring(response: 0.42, dampingFraction: 0.78), value: recentRuns.map(\.id))
             }
-            .coordinateSpace(name: "dashboardScroll")
 
         }
         }
