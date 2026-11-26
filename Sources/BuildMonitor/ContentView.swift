@@ -293,7 +293,9 @@ struct DashboardView: View {
                 || (run?.title.localizedStandardContains(query) ?? false)
                 || (run?.headBranch.localizedStandardContains(query) ?? false)
                 || (run?.shortSHA.localizedStandardContains(query) ?? false)
-            let matchesStatus = selectedBuildFilter == nil || run?.buildStatus == selectedBuildFilter
+            let active = store.activeRuns(for: repository.fullName).first
+            let effectiveRun = active ?? run
+            let matchesStatus = selectedBuildFilter == nil || effectiveRun?.buildStatus == selectedBuildFilter
             return matchesQuery && matchesStatus
         }
         return matching.sorted { lhs, rhs in
@@ -565,6 +567,8 @@ private struct RepositoryCard: View {
     let activeRuns: [WorkflowRun]
     let displayName: String
     let note: String
+    // Active builds override the last completed run for the card's primary state.
+    private var displayRun: WorkflowRun? { activeRuns.first ?? run
     private var tint: Color {
         let palette: [Color] = [Palette.blue, Palette.purple, Palette.success, .pink, .cyan, .orange]
         return palette[Int(UInt(bitPattern: repository.name.hashValue) % UInt(palette.count))]
@@ -579,8 +583,8 @@ private struct RepositoryCard: View {
     var body: some View {
         VStack(spacing: 9) {
             Group {
-                if let run {
-                    NavigationLink { RunDetailView(repository: repository, run: run) } label: { cardBody }
+                if let displayRun {
+                    NavigationLink { RunDetailView(repository: repository, run: displayRun) } label: { cardBody }
                         .buttonStyle(AppPressableButtonStyle())
                 } else { cardBody }
             }
@@ -596,9 +600,9 @@ private struct RepositoryCard: View {
                         .background(Palette.blue.opacity(0.10), in: Capsule())
                         .foregroundStyle(Palette.blue)
                 }
-                if let run, run.buildStatus == .failed {
+                if let displayRun, displayRun.buildStatus == .failed {
                     Button {
-                        Task { await retryFailedJobs(run) }
+                        Task { await retryFailedJobs(displayRun) }
                     } label: {
                         Group {
                             if rerunningRunID == run.id {
@@ -681,7 +685,7 @@ private struct RepositoryCard: View {
             repositoryHeader
             latestRunHeader
             runMetadata
-            if activeRuns.count > 1 {
+            if !activeRuns.isEmpty {
                 activeRunsSection
             }
         }
@@ -719,8 +723,8 @@ private struct RepositoryCard: View {
                 }
             }
             Spacer(minLength: 2)
-            if let run {
-                StatusPill(status: run.buildStatus)
+            if let displayRun {
+                StatusPill(status: displayRun.buildStatus)
             } else {
                 Text("暂无记录")
                     .font(.system(size: 11, weight: .semibold))
@@ -734,13 +738,13 @@ private struct RepositoryCard: View {
 
     private var latestRunHeader: some View {
         HStack {
-            Text(run?.title ?? "尚未发现 Actions 运行记录")
+            Text(displayRun?.title ?? "尚未发现 Actions 运行记录")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Palette.ink)
                 .lineLimit(1)
             Spacer()
-            if let run {
-                Text("#\(run.runNumber)")
+            if let displayRun {
+                Text("#\(displayRun.runNumber)")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Palette.secondary)
             }
@@ -750,13 +754,13 @@ private struct RepositoryCard: View {
     @ViewBuilder
     private var runMetadata: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let run {
+            if let displayRun {
                 HStack {
-                    Text("\(run.headBranch) · \(run.shortSHA)")
+                    Text("\(displayRun.headBranch) · \(displayRun.shortSHA)")
                     Spacer()
                     Text(RelativeDateTimeFormatter.localized(run.updatedAt))
                 }.font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
-                BuildElapsedTimer(createdAt: run.createdAt, updatedAt: run.updatedAt, runStartedAt: run.runStartedAt, status: run.status, label: run.status == "queued" || run.status == "waiting" || run.status == "requested" || run.status == "pending" ? "排队时间" : (run.status == "in_progress" ? "总构建耗时" : "最终耗时"))
+                BuildElapsedTimer(createdAt: displayRun.createdAt, updatedAt: displayRun.updatedAt, runStartedAt: displayRun.runStartedAt, status: displayRun.status, label: displayRun.status == "queued" || displayRun.status == "waiting" || displayRun.status == "requested" || displayRun.status == "pending" ? "排队时间" : (displayRun.status == "in_progress" ? "总构建耗时" : "最终耗时"))
             } else {
                 Text("默认分支：\(repository.defaultBranch)").font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
             }
