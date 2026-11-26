@@ -28,7 +28,7 @@ struct RunDetailView: View {
     var body: some View {
         ZStack {
             AppBackground()
-            ScrollView {
+            ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 17) {
                     repositoryHeader
                     runStatusCard
@@ -75,7 +75,10 @@ struct RunDetailView: View {
                         }
                     }
                     .id(selectedTab)
-                    .transition(.opacity)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing).combined(with: .scale(scale: 0.985)),
+                        removal: .move(edge: .leading).combined(with: .scale(scale: 0.985))
+                    ))
 
                     if let shareURL {
                         ShareLink(item: shareURL) {
@@ -92,7 +95,7 @@ struct RunDetailView: View {
             .refreshable {
                 await loadDetails()
             }
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: selectedTab)
+            .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.86), value: selectedTab)
         }
         .sheet(isPresented: $showDownloadedZipSheet) {
             if let shareURL {
