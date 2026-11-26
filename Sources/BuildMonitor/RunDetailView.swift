@@ -379,16 +379,34 @@ struct RunDetailView: View {
                         }
                     } else {
                         HStack(spacing: 9) {
-                            Button { Task { await downloadAndExtract(artifact) } } label: {
-                                Label("下载并解压", systemImage: "archivebox").font(.system(size: 11, weight: .semibold))
-                                    .frame(maxWidth: .infinity).padding(.vertical, 10)
-                                    .background(Palette.blue.opacity(0.12), in: Capsule()).foregroundStyle(Palette.blue)
+                            Button {
+                                artifactError = nil
+                                Task { await downloadAndExtract(artifact) }
+                            } label: {
+                                Label("下载并解压", systemImage: "archivebox")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(Palette.blue.opacity(0.12), in: Capsule())
+                                    .foregroundStyle(Palette.blue)
+                                    .contentShape(Capsule())
                             }
-                            Button { Task { await download(artifact) } } label: {
-                                Label("下载 ZIP", systemImage: "arrow.down.circle").font(.system(size: 11, weight: .semibold))
-                                    .frame(maxWidth: .infinity).padding(.vertical, 10)
-                                    .background(Color.white.opacity(0.65), in: Capsule()).foregroundStyle(Palette.secondary)
+                            .buttonStyle(.plain)
+                            .contentShape(Capsule())
+                            Button {
+                                artifactError = nil
+                                Task { await download(artifact) }
+                            } label: {
+                                Label("下载 ZIP", systemImage: "arrow.down.circle")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(Color.white.opacity(0.65), in: Capsule())
+                                    .foregroundStyle(Palette.secondary)
+                                    .contentShape(Capsule())
                             }
+                            .buttonStyle(.plain)
+                            .contentShape(Capsule())
                         }
                     }
                 }.padding(14).glassCard(18).motionAppear(0.025)
