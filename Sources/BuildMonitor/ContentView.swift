@@ -568,7 +568,7 @@ private struct RepositoryCard: View {
     let displayName: String
     let note: String
     // Active builds override the last completed run for the card's primary state.
-    private var displayRun: WorkflowRun? { activeRuns.first ?? run
+    private var displayRun: WorkflowRun? { activeRuns.first ?? run }
     private var tint: Color {
         let palette: [Color] = [Palette.blue, Palette.purple, Palette.success, .pink, .cyan, .orange]
         return palette[Int(UInt(bitPattern: repository.name.hashValue) % UInt(palette.count))]
@@ -605,7 +605,7 @@ private struct RepositoryCard: View {
                         Task { await retryFailedJobs(displayRun) }
                     } label: {
                         Group {
-                            if rerunningRunID == run.id {
+                            if rerunningRunID == displayRun.id {
                                 ProgressView().tint(Palette.blue)
                             } else {
                                 Label("重跑失败任务", systemImage: "arrow.clockwise.circle.fill")
