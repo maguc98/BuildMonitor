@@ -192,7 +192,7 @@ struct BuildElapsedTimer: View {
     private var queueDuration: TimeInterval { max(0, (WorkflowRun.parseDate(runStartedAt ?? "") ?? finishDate).timeIntervalSince(startDate)) }
     private var active: Bool { ["queued", "waiting", "requested", "pending", "in_progress"].contains(status) }
     var body: some View {
-        if active { TimelineView(.periodic(from: .now, by: 1)) { ctx in timerRows(now: ctx.date) } }
+        if active { TimelineView(.periodic(from: .now, by: 5)) { ctx in timerRows(now: ctx.date) } }
         else { timerRows(now: finishDate) }
     }
     private func timerRows(now: Date) -> some View {
