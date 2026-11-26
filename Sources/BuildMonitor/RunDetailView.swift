@@ -375,7 +375,13 @@ struct RunDetailView: View {
                                         .contentTransition(.numericText())
                                 }
                             }
-                            ProgressView().tint(Palette.blue)
+                            if isExtractingArtifactID == artifact.id {
+                                ProgressView().tint(Palette.blue)
+                            } else {
+                                ProgressView(value: artifactDownloadProgress)
+                                    .tint(Palette.blue)
+                                    .animation(.linear(duration: 0.12), value: artifactDownloadProgress)
+                            }
                         }
                     } else {
                         HStack(spacing: 9) {
@@ -418,6 +424,7 @@ struct RunDetailView: View {
 
     private func downloadAndExtract(_ artifact: WorkflowArtifact) async {
         downloadingArtifactID = artifact.id
+        artifactDownloadProgress = 0
         artifactError = nil
         do {
             let zipURL = try await store.downloadArtifact(repository: repository.fullName, artifact: artifact) { progress in
