@@ -691,6 +691,8 @@ private struct RepositoryCard: View {
         }
         .padding(14)
         .glassCard(21)
+        .animation(.spring(response: 0.38, dampingFraction: 0.82), value: displayRun?.buildStatus)
+        .animation(.spring(response: 0.34, dampingFraction: 0.82), value: activeRuns.count)
     }
 
     private var repositoryHeader: some View {
