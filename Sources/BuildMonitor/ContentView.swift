@@ -1410,21 +1410,147 @@ struct HistoryView: View {
 }
 
 struct NotificationsView: View {
+    @AppStorage("buildNotifications.enabled") private var notificationsEnabled = false
+    @AppStorage("buildNotifications.success") private var successNotifications = true
+    @AppStorage("buildNotifications.failure") private var failureNotifications = true
+    @State private var permissionStatus = "检查中…"
+    @State private var permissionGranted = false
+    @State private var showingPermissionAlert = false
+
     var body: some View {
         ZStack {
             AppBackground()
-            VStack(spacing: 14) {
-                Image(systemName: "bell.badge").font(.system(size: 42, weight: .light)).foregroundStyle(Palette.blue).symbolEffect(.pulse, options: .repeating)
-                Text("构建通知").font(.system(size: 22, weight: .bold)).foregroundStyle(Palette.ink)
-                Text("开启设置中的构建通知后，状态变化会发送本地通知。App 前台每 60 秒同步；后台刷新由 iOS 按系统策略择机执行。")
-                    .font(.system(size: 14)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center).padding(.horizontal, 30)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(spacing: 10) {
+                        Image(systemName: notificationsEnabled ? "bell.badge.fill" : "bell.badge")
+                            .font(.system(size: 38, weight: .light))
+                            .foregroundStyle(Palette.blue)
+                            .symbolEffect(.pulse, options: .repeating, isActive: notificationsEnabled)
+                        Text("构建状态通知")
+                            .font(.system(size: 23, weight: .bold, design: .rounded))
+                            .foregroundStyle(Palette.ink)
+                        Text("GitHub Actions 构建状态发生变化时，及时提醒你。")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Palette.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                    .glassCard(22)
+                    .motionAppear(0.02)
+
+                    VStack(spacing: 0) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "bell.badge").foregroundStyle(Palette.blue).frame(width: 24)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("构建状态通知").font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
+                                Text("开启成功与失败状态提醒").font(.system(size: 11)).foregroundStyle(Palette.secondary)
+                            }
+                            Spacer()
+                            Toggle("构建状态通知", isOn: $notificationsEnabled).labelsHidden().tint(Palette.blue)
+                        }.padding(15)
+                        if notificationsEnabled {
+                            Divider().padding(.leading, 48)
+                            notificationRow(icon: "checkmark.circle.fill", title: "构建成功", subtitle: "构建完成并成功", value: $successNotifications)
+                            Divider().padding(.leading, 48)
+                            notificationRow(icon: "xmark.circle.fill", title: "构建失败", subtitle: "构建失败时提醒", value: $failureNotifications)
+                        }
+                    }
+                    .glassCard(20)
+                    .motionAppear(0.06)
+
+                    HStack(spacing: 10) {
+                        Image(systemName: permissionGranted ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                            .foregroundStyle(permissionGranted ? Palette.success : Palette.orange)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("系统通知权限").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
+                            Text(permissionStatus).font(.system(size: 11)).foregroundStyle(Palette.secondary)
+                        }
+                        Spacer()
+                        if !permissionGranted {
+                            Link(destination: URL(string: "app-settings:")!) {
+                                Text("系统设置").font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(Palette.blue)
+                            }
+                        }
+                    }
+                    .padding(15)
+                    .glassCard(18)
+                    .motionAppear(0.1)
+
+                    Text("App 前台约每 60 秒同步一次。后台提醒受 iOS 后台刷新策略限制，系统可能延迟执行。")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.secondary)
+                        .padding(.horizontal, 4)
+                }.padding(18)
             }
-            .motionAppear(0.04)
         }
-        .navigationTitle("通知").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("通知")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await refreshPermissionStatus() }
+        .onChange(of: notificationsEnabled) { _, enabled in
+            if enabled {
+                Task {
+                    let granted = await BuildNotificationManager.requestAuthorization()
+                    await refreshPermissionStatus()
+                    if !granted {
+                        notificationsEnabled = false
+                        showingPermissionAlert = true
+                    } else {
+                        BackgroundRefreshScheduler.schedule()
+                    }
+                }
+            } else {
+                BackgroundRefreshScheduler.schedule()
+            }
+        }
+        .onChange(of: successNotifications) { _, _ in BackgroundRefreshScheduler.schedule() }
+        .onChange(of: failureNotifications) { _, _ in BackgroundRefreshScheduler.schedule() }
+        .alert("需要通知权限", isPresented: $showingPermissionAlert) {
+            Button("知道了", role: .cancel) {}
+            Button("打开系统设置") {
+                if let url = URL(string: "app-settings:") { UIApplication.shared.open(url) }
+            }
+        } message: {
+            Text("请在 iPhone 设置中允许 Build Monitor 发送通知，然后返回此页面开启通知。")
+        }
+    }
+
+    private func notificationRow(icon: String, title: String, subtitle: String, value: Binding<Bool>) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon).foregroundStyle(Palette.blue).frame(width: 24)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
+                Text(subtitle).font(.system(size: 11)).foregroundStyle(Palette.secondary)
+            }
+            Spacer()
+            Toggle(title, isOn: value).labelsHidden().tint(Palette.blue)
+        }.padding(15)
+    }
+
+    @MainActor
+    private func refreshPermissionStatus() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        switch settings.authorizationStatus {
+        case .authorized:
+            permissionStatus = "已允许通知"
+            permissionGranted = true
+        case .provisional:
+            permissionStatus = "已允许静默通知"
+            permissionGranted = true
+        case .denied:
+            permissionStatus = "已拒绝，需要在系统设置中开启"
+            permissionGranted = false
+        case .notDetermined:
+            permissionStatus = "尚未授权，开启通知时会请求权限"
+            permissionGranted = false
+        @unknown default:
+            permissionStatus = "通知权限状态未知"
+            permissionGranted = false
+        }
     }
 }
-
 struct SettingsView: View {
     @EnvironmentObject private var store: BuildMonitorStore
     @State private var showConnection = false
