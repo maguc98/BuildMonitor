@@ -361,7 +361,7 @@ struct DashboardView: View {
                             if store.isLoading { ProgressView().tint(Palette.blue) }
                             else {
                                 Button { Task { await store.refresh() } } label: {
-                                    Image(systemName: "arrow.clockwise").foregroundStyle(Palette.ink)
+                                    Image(systemName: "arrow.clockwise").foregroundStyle(Palette.ink).symbolEffect(.rotate, value: store.isLoading)
                                 }
                             }
                         }
@@ -908,7 +908,7 @@ private struct WorkflowLaunchSheet: View {
             Task { await launch(workflow) }
         } label: {
             HStack(spacing: 11) {
-                Image(systemName: launchingWorkflowID == workflow.id ? "hourglass" : "play.circle.fill")
+                Image(systemName: launchingWorkflowID == workflow.id ? "hourglass" : "play.circle.fill").symbolEffect(.bounce, value: launchingWorkflowID == workflow.id)
                     .font(.system(size: 23, weight: .semibold))
                     .foregroundStyle(Palette.blue)
                 VStack(alignment: .leading, spacing: 3) {
@@ -1062,7 +1062,7 @@ struct RepositoryManagementView: View {
     private func managementStat(title: String, count: Int, icon: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 10, weight: .semibold)).foregroundStyle(tint)
+                Image(systemName: icon).font(.system(size: 10, weight: .semibold)).foregroundStyle(tint).symbolEffect(.bounce, value: tint)
                 Text(title).font(.system(size: 10, weight: .medium)).foregroundStyle(Palette.secondary)
             }
             Text("\(count)")
@@ -1406,7 +1406,7 @@ struct NotificationsView: View {
         ZStack {
             AppBackground()
             VStack(spacing: 14) {
-                Image(systemName: "bell.badge").font(.system(size: 42, weight: .light)).foregroundStyle(Palette.blue)
+                Image(systemName: "bell.badge").font(.system(size: 42, weight: .light)).foregroundStyle(Palette.blue).symbolEffect(.pulse, options: .repeating)
                 Text("构建通知").font(.system(size: 22, weight: .bold)).foregroundStyle(Palette.ink)
                 Text("开启设置中的构建通知后，状态变化会发送本地通知。App 前台每 60 秒同步；后台刷新由 iOS 按系统策略择机执行。")
                     .font(.system(size: 14)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center).padding(.horizontal, 30)
@@ -1504,7 +1504,7 @@ private struct NotificationToggleRow: View {
 
     var body: some View {
         HStack {
-            Image(systemName: icon).foregroundStyle(Palette.blue).frame(width: 24)
+            Image(systemName: icon).foregroundStyle(Palette.blue).frame(width: 24).symbolEffect(.bounce, value: title)
             Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
             Spacer()
             Toggle(title, isOn: $value).labelsHidden().tint(Palette.blue)
