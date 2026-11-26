@@ -19,6 +19,7 @@ struct RunDetailView: View {
     @State private var downloadingArtifactID: Int?
     @State private var artifactDownloadProgress: Double = 0
     @State private var shareURL: URL?
+    @State private var showDownloadedZipSheet = false
     @State private var extractedFolderURL: URL?
     @State private var isExtractingArtifactID: Int?
     @State private var artifactError: String?
@@ -358,13 +359,7 @@ struct RunDetailView: View {
                                         .contentTransition(.numericText())
                                 }
                             }
-                            if isExtractingArtifactID != artifact.id {
-                                ProgressView(value: artifactDownloadProgress)
-                                    .tint(Palette.blue)
-                                    .animation(.smooth(duration: 0.22), value: artifactDownloadProgress)
-                            } else {
-                                ProgressView().tint(Palette.blue)
-                            }
+                            ProgressView().tint(Palette.blue)
                         }
                     } else {
                         HStack(spacing: 9) {
@@ -432,6 +427,7 @@ struct RunDetailView: View {
             ) { progress in
                 artifactDownloadProgress = progress
             }
+            showDownloadedZipSheet = true
         } catch {
             errorMessage = error.localizedDescription
         }
