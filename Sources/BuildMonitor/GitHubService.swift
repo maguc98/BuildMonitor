@@ -252,18 +252,12 @@ struct GitHubAPIClient {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
-        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        await progress(0)
+        let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw GitHubAPIError.invalidResponse }
         guard (200...299).contains(http.statusCode) else {
             if http.statusCode == 401 { throw GitHubAPIError.unauthorized }
             throw GitHubAPIError.server("Artifact 下载失败（HTTP \(http.statusCode)）。")
-        }
-        let expected = response.expectedContentLength
-        var data = Data()
-        if expected > 0 { data.reserveCapacity(Int(expected)) }
-        for try await byte in bytes {
-            data.append(byte)
-            if expected > 0 { await progress(min(1, Double(data.count) / Double(expected))) }
         }
         await progress(1)
         return data
