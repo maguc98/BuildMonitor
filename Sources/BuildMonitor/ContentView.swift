@@ -107,15 +107,11 @@ struct RootTabView: View {
 
 struct AppBackground: View {
     var body: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.98, green: 0.97, blue: 1),
-                Color(red: 0.94, green: 0.95, blue: 1),
-                Color(red: 0.96, green: 0.95, blue: 1)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        ).ignoresSafeArea()
+        ZStack {
+            LinearGradient(colors: [Color(red: 0.985, green: 0.985, blue: 1), Color(red: 0.94, green: 0.96, blue: 1), Color(red: 0.965, green: 0.95, blue: 0.99)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            Circle().fill(Palette.blue.opacity(0.07)).frame(width: 260, height: 260).blur(radius: 70).offset(x: 150, y: -260)
+            Circle().fill(Palette.purple.opacity(0.06)).frame(width: 240, height: 240).blur(radius: 65).offset(x: -150, y: 180)
+        }.ignoresSafeArea()
     }
 }
 
@@ -165,9 +161,10 @@ extension View {
 
     func glassCard(_ radius: CGFloat = 22) -> some View {
         self
-            .background(Color.white.opacity(0.82), in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).stroke(.white.opacity(0.72), lineWidth: 0.8))
-            .shadow(color: Palette.ink.opacity(0.035), radius: 7, x: 0, y: 3)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(Color.white.opacity(0.38)) )
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).stroke(.white.opacity(0.82), lineWidth: 1))
+            .shadow(color: Palette.ink.opacity(0.055), radius: 16, x: 0, y: 7)
     }
 }
 
@@ -320,7 +317,7 @@ struct DashboardView: View {
         ZStack {
             AppBackground()
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 17) {
                     header
                     if !store.isConnected {
                         connectPrompt
@@ -332,9 +329,9 @@ struct DashboardView: View {
                             SummaryTile(value: count(.queued), title: "排队中", icon: "hourglass", tint: Palette.purple, status: .queued)
                             SummaryTile(value: count(.failed), title: "失败", icon: "xmark.circle.fill", tint: Palette.danger, status: .failed)
                         }
-                        .padding(9).glassCard(25).motionAppear(0.08)
+                        .padding(8).glassCard(23).motionAppear(0.08)
                         HStack {
-                            Text("我的项目").font(.system(size: 21, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
+                            Text("我的项目").font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
                             Text("\(store.visibleRepositories.count)/\(store.repositories.count)").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.secondary)
                             Spacer()
                             Button {
@@ -408,10 +405,13 @@ struct DashboardView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            AppMark(size: 57)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Build Monitor").font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
-                Text("GitHub 构建监控").font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.secondary)
+            AppMark(size: 49)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Build Monitor").font(.system(size: 23, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
+                HStack(spacing: 5) {
+                    Circle().fill(store.isConnected ? Palette.success : Palette.secondary).frame(width: 6, height: 6)
+                    Text(store.isConnected ? "实时监控已连接" : "GitHub 构建监控").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.secondary)
+                }
             }
             Spacer()
             Button { showConnection = true } label: {
@@ -450,15 +450,26 @@ private struct SummaryTile: View {
     let tint: Color
     let status: BuildStatus
     var body: some View {
-        VStack(spacing: 8) {
-            StatusGlyph(status: status, size: 21).frame(height: 27)
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 27, height: 27)
+                    .background(tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 9))
+                Spacer(minLength: 0)
+                StatusGlyph(status: status, size: 10)
+            }
             Text(value)
-                .font(.system(size: 23, weight: .bold, design: .rounded))
+                .font(.system(size: 25, weight: .bold, design: .rounded))
                 .foregroundStyle(Palette.ink)
-            Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
+                .contentTransition(.numericText())
+            Text(title).font(.system(size: 10, weight: .medium)).foregroundStyle(Palette.secondary)
         }
-        .frame(maxWidth: .infinity).padding(.vertical, 12)
-        .background(tint.opacity(0.075), in: RoundedRectangle(cornerRadius: 17))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10).padding(.vertical, 11)
+        .background(tint.opacity(0.065), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(tint.opacity(0.10), lineWidth: 0.8))
     }
 }
 
