@@ -253,12 +253,8 @@ struct GitHubAPIClient {
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
         await progress(0)
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw GitHubAPIError.invalidResponse }
-        guard (200...299).contains(http.statusCode) else {
-            if http.statusCode == 401 { throw GitHubAPIError.unauthorized }
-            throw GitHubAPIError.server("Artifact 下载失败（HTTP \(http.statusCode)）。")
-        }
+        let delegate = ArtifactDownloadDelegate(progress: progress)
+        let data = try await delegate.download(request: request)
         await progress(1)
         return data
     }
@@ -784,5 +780,52 @@ final class BuildNotificationDelegate: NSObject, UNUserNotificationCenterDelegat
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .list, .sound])
+    }
+}
+
+private final class ArtifactDownloadDelegate: NSObject, URLSessionDownloadDelegate {
+    private let progressHandler: @MainActor (Double) -> Void
+    private var continuation: CheckedContinuation<Data, Error>?
+    private var session: URLSession?
+
+    init(progress: @escaping @MainActor (Double) -> Void) { self.progressHandler = progress }
+
+    func download(request: URLRequest) async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            self.continuation = continuation
+            let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+            self.session = session
+            session.downloadTask(with: request).resume()
+        }
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        guard totalBytesExpectedToWrite > 0 else { return }
+        let fraction = min(1, max(0, Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)))
+        Task { @MainActor in progressHandler(fraction) }
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        do {
+            let data = try Data(contentsOf: location)
+            guard let response = downloadTask.response as? HTTPURLResponse else { finish(.failure(GitHubAPIError.invalidResponse)); return }
+            guard (200...299).contains(response.statusCode) else {
+                finish(.failure(response.statusCode == 401 ? GitHubAPIError.unauthorized : GitHubAPIError.server("Artifact 下载失败（HTTP \(response.statusCode)）。")))
+                return
+            }
+            finish(.success(data))
+        } catch { finish(.failure(error)) }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error { finish(.failure(error)) }
+    }
+
+    private func finish(_ result: Result<Data, Error>) {
+        guard let continuation else { return }
+        self.continuation = nil
+        session?.invalidateAndCancel()
+        session = nil
+        continuation.resume(with: result)
     }
 }
