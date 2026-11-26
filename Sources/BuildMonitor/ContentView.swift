@@ -14,34 +14,31 @@ struct RootTabView: View {
         ZStack {
             ZStack {
                 NavigationStack { DashboardView() }
-                    .opacity(selectedTab == 0 ? 1 : 0)
                     .offset(x: pageOffset(for: 0))
                     .zIndex(selectedTab == 0 ? 1 : 0)
                     .allowsHitTesting(selectedTab == 0)
                     .accessibilityHidden(selectedTab != 0)
 
                 NavigationStack { HistoryView() }
-                    .opacity(selectedTab == 1 ? 1 : 0)
                     .offset(x: pageOffset(for: 1))
                     .zIndex(selectedTab == 1 ? 1 : 0)
                     .allowsHitTesting(selectedTab == 1)
                     .accessibilityHidden(selectedTab != 1)
 
                 NavigationStack { NotificationsView() }
-                    .opacity(selectedTab == 2 ? 1 : 0)
                     .offset(x: pageOffset(for: 2))
                     .zIndex(selectedTab == 2 ? 1 : 0)
                     .allowsHitTesting(selectedTab == 2)
                     .accessibilityHidden(selectedTab != 2)
 
                 NavigationStack { SettingsView() }
-                    .opacity(selectedTab == 3 ? 1 : 0)
                     .offset(x: pageOffset(for: 3))
                     .zIndex(selectedTab == 3 ? 1 : 0)
                     .allowsHitTesting(selectedTab == 3)
                     .accessibilityHidden(selectedTab != 3)
             }
             .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: selectedTab)
+            .clipped()
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             tabBar
@@ -1148,7 +1145,7 @@ struct RepositoryManagementView: View {
                 }
                 ForEach(displayedRepositories) { repository in
                     repositoryRow(repository)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .transition(.move(edge: .bottom).combined(with: .scale(scale: 0.985)))
                 }
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.84), value: showingHidden)
@@ -1368,7 +1365,7 @@ struct HistoryView: View {
                                     Label("删除", systemImage: "trash")
                                 }
                             }
-                            .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .bottom)).combined(with: .scale(scale: 0.96)), removal: .opacity.combined(with: .scale(scale: 0.88))))
+                            .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .scale(scale: 0.97)), removal: .move(edge: .top).combined(with: .scale(scale: 0.985))))
                         }
                     }
                 }.padding(18).motionAppear()
