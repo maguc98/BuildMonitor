@@ -17,6 +17,7 @@ struct RunDetailView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var downloadingArtifactID: Int?
+    @State private var artifactDownloadProgress: Double = 0
     @State private var shareURL: URL?
     @State private var extractedFolderURL: URL?
     @State private var isExtractingArtifactID: Int?
@@ -346,7 +347,25 @@ struct RunDetailView: View {
                     if artifact.expired {
                         Label("Artifact 已过期", systemImage: "xmark.circle").font(.system(size: 11)).foregroundStyle(Palette.danger)
                     } else if downloadingArtifactID == artifact.id || isExtractingArtifactID == artifact.id {
-                        HStack { ProgressView().tint(Palette.blue); Text(isExtractingArtifactID == artifact.id ? "正在解压…" : "正在下载…").font(.system(size: 11)).foregroundStyle(Palette.secondary) }
+                        VStack(alignment: .leading, spacing: 7) {
+                            HStack {
+                                Text(isExtractingArtifactID == artifact.id ? "正在解压…" : "正在下载…")
+                                    .font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
+                                Spacer()
+                                if isExtractingArtifactID != artifact.id {
+                                    Text(artifactDownloadProgress > 0 ? "\(Int(artifactDownloadProgress * 100))%" : "准备中")
+                                        .font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(Palette.blue)
+                                        .contentTransition(.numericText())
+                                }
+                            }
+                            if isExtractingArtifactID != artifact.id {
+                                ProgressView(value: artifactDownloadProgress)
+                                    .tint(Palette.blue)
+                                    .animation(.smooth(duration: 0.22), value: artifactDownloadProgress)
+                            } else {
+                                ProgressView().tint(Palette.blue)
+                            }
+                        }
                     } else {
                         HStack(spacing: 9) {
                             Button { Task { await downloadAndExtract(artifact) } } label: {
@@ -372,7 +391,7 @@ struct RunDetailView: View {
         downloadingArtifactID = artifact.id
         artifactError = nil
         do {
-            let zipURL = try await store.downloadArtifact(repository: repository.fullName, artifact: artifact)
+            let zipURL = try await store.downloadArtifact(repository: repository.fullName, artifact: artifact) { progress in\n                artifactDownloadProgress = progress\n            }
             downloadingArtifactID = nil
             isExtractingArtifactID = artifact.id
             let folder = try ArtifactArchiveService.extract(zipURL: zipURL, name: artifact.name, id: artifact.id)
