@@ -11,34 +11,17 @@ struct RootTabView: View {
     private let tabIcons = ["square.grid.2x2.fill", "clock", "bell", "gearshape"]
 
     var body: some View {
-        ZStack {
-            ZStack {
-                NavigationStack { DashboardView() }
-                    .offset(x: pageOffset(for: 0))
-                    .zIndex(selectedTab == 0 ? 1 : 0)
-                    .allowsHitTesting(selectedTab == 0)
-                    .accessibilityHidden(selectedTab != 0)
-
-                NavigationStack { HistoryView() }
-                    .offset(x: pageOffset(for: 1))
-                    .zIndex(selectedTab == 1 ? 1 : 0)
-                    .allowsHitTesting(selectedTab == 1)
-                    .accessibilityHidden(selectedTab != 1)
-
-                NavigationStack { NotificationsView() }
-                    .offset(x: pageOffset(for: 2))
-                    .zIndex(selectedTab == 2 ? 1 : 0)
-                    .allowsHitTesting(selectedTab == 2)
-                    .accessibilityHidden(selectedTab != 2)
-
-                NavigationStack { SettingsView() }
-                    .offset(x: pageOffset(for: 3))
-                    .zIndex(selectedTab == 3 ? 1 : 0)
-                    .allowsHitTesting(selectedTab == 3)
-                    .accessibilityHidden(selectedTab != 3)
+        NavigationStack {
+            Group {
+                switch selectedTab {
+                case 0: DashboardView()
+                case 1: HistoryView()
+                case 2: NotificationsView()
+                default: SettingsView()
+                }
             }
-            .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: selectedTab)
-            .clipped()
+            .id(selectedTab)
+            .transition(reduceMotion ? .identity : .move(edge: selectedTab > 0 ? .trailing : .leading))
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             tabBar
@@ -62,11 +45,6 @@ struct RootTabView: View {
                 BackgroundRefreshScheduler.schedule()
             }
         }
-    }
-
-    private func pageOffset(for index: Int) -> CGFloat {
-        guard selectedTab != index else { return 0 }
-        return index > selectedTab ? 18 : -18
     }
 
     private var tabBar: some View {
@@ -183,7 +161,7 @@ extension View {
                     .stroke(.white.opacity(0.82), lineWidth: 1)
                     .allowsHitTesting(false)
             }
-            .shadow(color: Palette.ink.opacity(0.045), radius: 11, x: 0, y: 5)
+            .shadow(color: Palette.ink.opacity(0.025), radius: 4, x: 0, y: 2)
     }
 }
 
@@ -403,7 +381,7 @@ struct DashboardView: View {
                             )
                             .padding(.top, 18)
                         } else {
-                            VStack(spacing: 12) {
+                            LazyVStack(spacing: 12) {
                                 ForEach(filteredRepositories) { repository in
                                     RepositoryCard(
                                         repository: repository,
@@ -413,7 +391,7 @@ struct DashboardView: View {
                                         note: store.note(for: repository)
                                     )
                                     .id(repository.id)
-                                    .motionAppear(0)
+                                    
                                     .transition(.asymmetric(
                                         insertion: .move(edge: .bottom).combined(with: .scale(scale: 0.975)),
                                         removal: .move(edge: .top).combined(with: .scale(scale: 0.985))
@@ -430,7 +408,7 @@ struct DashboardView: View {
                 .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 28)
                 .motionAppear(0.02)
                 .animation(.spring(response: 0.42, dampingFraction: 0.78), value: store.visibleRepositories.count)
-                .animation(.spring(response: 0.42, dampingFraction: 0.78), value: recentRuns.map(\.id))
+
             }
 
         }
