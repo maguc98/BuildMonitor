@@ -307,8 +307,48 @@ struct DashboardView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showConnection = false
     @State private var showRepositoryManagement = false
+    @State private var repositorySearchText = ""
+    @State private var selectedBuildFilter: BuildStatus?
+    @State private var prioritizeFailures = true
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+    private let buildFilters: [(title: String, status: BuildStatus?)] = [
+        ("全部", nil), ("失败", .failed), ("运行中", .inProgress), ("排队", .queued), ("成功", .success)
+    ]
     private var recentRuns: [RepositoryRun] { store.allRecentRuns }
+
+    private var filteredRepositories: [GitHubRepository] {
+        let query = repositorySearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let matching = store.visibleRepositories.filter { repository in
+            let run = store.latestRun(for: repository.fullName)
+            let matchesQuery = query.isEmpty
+                || store.displayName(for: repository).localizedStandardContains(query)
+                || repository.fullName.localizedStandardContains(query)
+                || store.note(for: repository).localizedStandardContains(query)
+                || (run?.title.localizedStandardContains(query) ?? false)
+                || (run?.headBranch.localizedStandardContains(query) ?? false)
+                || (run?.shortSHA.localizedStandardContains(query) ?? false)
+            let matchesStatus = selectedBuildFilter == nil || run?.buildStatus == selectedBuildFilter
+            return matchesQuery && matchesStatus
+        }
+        return matching.sorted { lhs, rhs in
+            func priority(_ repository: GitHubRepository) -> Int {
+                switch store.latestRun(for: repository.fullName)?.buildStatus {
+                case .failed: return 0
+                case .inProgress: return 1
+                case .queued: return 2
+                case .success: return 3
+                case nil: return 4
+                }
+            }
+            if prioritizeFailures {
+                let leftPriority = priority(lhs)
+                let rightPriority = priority(rhs)
+                if leftPriority != rightPriority { return leftPriority < rightPriority }
+            }
+            return (store.latestRun(for: lhs.fullName)?.updatedAt ?? "")
+                > (store.latestRun(for: rhs.fullName)?.updatedAt ?? "")
+        }
+    }
     private func count(_ status: BuildStatus) -> String {
         String(recentRuns.filter { $0.run.buildStatus == status }.count)
     }
@@ -354,6 +394,9 @@ struct DashboardView: View {
                                 }
                             }
                         }
+                        if !store.visibleRepositories.isEmpty {
+                            repositoryTools
+                        }
                         if store.repositories.isEmpty && !store.isLoading {
                             ContentUnavailableView("没有仓库", systemImage: "tray", description: Text("检查 Token 是否具有 Metadata 读取权限。"))
                         } else if store.visibleRepositories.isEmpty {
@@ -363,9 +406,16 @@ struct DashboardView: View {
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundStyle(Palette.blue)
                             }
+                        } else if filteredRepositories.isEmpty {
+                            ContentUnavailableView(
+                                "没有匹配的项目",
+                                systemImage: "line.3.horizontal.decrease.circle",
+                                description: Text("试试其他关键词，或切换构建状态筛选。")
+                            )
+                            .padding(.top, 18)
                         } else {
                             VStack(spacing: 12) {
-                                ForEach(store.visibleRepositories) { repository in
+                                ForEach(filteredRepositories) { repository in
                                     RepositoryCard(
                                         repository: repository,
                                         run: store.latestRun(for: repository.fullName),
@@ -401,6 +451,69 @@ struct DashboardView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+    }
+
+    private var repositoryTools: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(Palette.secondary)
+                TextField("搜索项目、工作流、分支或 SHA", text: $repositorySearchText)
+                    .font(.system(size: 12))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                if !repositorySearchText.isEmpty {
+                    Button { repositorySearchText = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(Palette.secondary)
+                    }
+                }
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+                        prioritizeFailures.toggle()
+                    }
+                } label: {
+                    Image(systemName: prioritizeFailures ? "exclamationmark.arrow.circlepath" : "clock.arrow.circlepath")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(prioritizeFailures ? Palette.danger : Palette.secondary)
+                        .frame(width: 31, height: 31)
+                        .background((prioritizeFailures ? Palette.danger : Palette.secondary).opacity(0.09), in: Circle())
+                }
+                .accessibilityLabel(prioritizeFailures ? "当前异常优先排序" : "当前最近更新排序")
+            }
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            .background(Color.white.opacity(0.76), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(.white.opacity(0.9), lineWidth: 0.8))
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 7) {
+                    ForEach(Array(buildFilters.indices), id: \.self) { index in
+                        let option = buildFilters[index]
+                        let selected = selectedBuildFilter?.rawValue == option.status?.rawValue
+                        let tint = option.status?.color ?? Palette.blue
+                        Button {
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+                                selectedBuildFilter = option.status
+                            }
+                        } label: {
+                            Text(option.title)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(selected ? .white : tint)
+                                .padding(.horizontal, 13).padding(.vertical, 8)
+                                .background(selected ? tint : tint.opacity(0.09), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            HStack {
+                Text("显示 \(filteredRepositories.count) / \(store.visibleRepositories.count) 个项目")
+                    .font(.system(size: 10, weight: .medium)).foregroundStyle(Palette.secondary)
+                Spacer()
+                Text(prioritizeFailures ? "异常优先" : "最近更新")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(prioritizeFailures ? Palette.danger : Palette.secondary)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: repositorySearchText)
     }
 
     private var header: some View {
@@ -487,6 +600,7 @@ private struct RepositoryCard: View {
     @EnvironmentObject private var store: BuildMonitorStore
     @State private var showWorkflowPicker = false
     @State private var cancelingRunID: Int?
+    @State private var rerunningRunID: Int?
     @State private var actionMessage: String?
 
     var body: some View {
@@ -508,6 +622,25 @@ private struct RepositoryCard: View {
                         .padding(.vertical, 10)
                         .background(Palette.blue.opacity(0.10), in: Capsule())
                         .foregroundStyle(Palette.blue)
+                }
+                if let run, run.buildStatus == .failed {
+                    Button {
+                        Task { await retryFailedJobs(run) }
+                    } label: {
+                        Group {
+                            if rerunningRunID == run.id {
+                                ProgressView().tint(Palette.blue)
+                            } else {
+                                Label("重跑失败任务", systemImage: "arrow.clockwise.circle.fill")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Palette.success.opacity(0.10), in: Capsule())
+                        .foregroundStyle(Palette.success)
+                    }
+                    .disabled(rerunningRunID != nil)
                 }
                 if !activeRuns.isEmpty {
                     Menu {
@@ -546,6 +679,17 @@ private struct RepositoryCard: View {
         } message: {
             Text(actionMessage ?? "")
         }
+    }
+
+    private func retryFailedJobs(_ failedRun: WorkflowRun) async {
+        rerunningRunID = failedRun.id
+        do {
+            try await store.rerunFailedJobs(repository: repository.fullName, runID: failedRun.id)
+            actionMessage = "已向 GitHub 提交失败任务重跑请求。"
+        } catch {
+            actionMessage = error.localizedDescription
+        }
+        rerunningRunID = nil
     }
 
     private func cancel(_ activeRun: WorkflowRun) async {
@@ -1162,6 +1306,26 @@ struct HistoryView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showRestore = false
     @State private var deletingID: String?
+    @State private var historySearchText = ""
+    @State private var selectedHistoryFilter: BuildStatus?
+    private let historyFilters: [(title: String, status: BuildStatus?)] = [
+        ("全部", nil), ("失败", .failed), ("运行中", .inProgress), ("排队", .queued), ("成功", .success)
+    ]
+
+    private var filteredHistoryRuns: [RepositoryRun] {
+        let query = historySearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return store.allRecentRuns.filter { item in
+            let matchesStatus = selectedHistoryFilter == nil || item.run.buildStatus == selectedHistoryFilter
+            let matchesQuery = query.isEmpty
+                || store.displayName(for: item.repository).localizedStandardContains(query)
+                || item.repository.fullName.localizedStandardContains(query)
+                || item.run.title.localizedStandardContains(query)
+                || item.run.headBranch.localizedStandardContains(query)
+                || item.run.shortSHA.localizedStandardContains(query)
+            return matchesStatus && matchesQuery
+        }
+    }
+
     var body: some View {
         ZStack {
             AppBackground()
@@ -1181,7 +1345,12 @@ struct HistoryView: View {
                     } else if store.allRecentRuns.isEmpty {
                         ContentUnavailableView("暂无构建记录", systemImage: "clock", description: Text("仓库还没有可读取的 Actions 运行记录，或记录已被隐藏。"))
                     } else {
-                        ForEach(store.allRecentRuns) { item in
+                        historyTools
+                        if filteredHistoryRuns.isEmpty {
+                            ContentUnavailableView("没有匹配的记录", systemImage: "magnifyingglass", description: Text("更换搜索关键词或构建状态筛选试试。"))
+                                .padding(.top, 20)
+                        }
+                        ForEach(filteredHistoryRuns) { item in
                             NavigationLink { RunDetailView(repository: item.repository, run: item.run) } label: {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 5) {
@@ -1213,6 +1382,49 @@ struct HistoryView: View {
 
         }
         .navigationTitle("历史").navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var historyTools: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(Palette.secondary)
+                TextField("搜索项目、工作流、分支或 SHA", text: $historySearchText)
+                    .font(.system(size: 12))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                if !historySearchText.isEmpty {
+                    Button { historySearchText = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(Palette.secondary)
+                    }
+                }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 7) {
+                    ForEach(Array(historyFilters.indices), id: \.self) { index in
+                        let option = historyFilters[index]
+                        let selected = selectedHistoryFilter?.rawValue == option.status?.rawValue
+                        let tint = option.status?.color ?? Palette.blue
+                        Button {
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+                                selectedHistoryFilter = option.status
+                            }
+                        } label: {
+                            Text(option.title)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(selected ? .white : tint)
+                                .padding(.horizontal, 13).padding(.vertical, 8)
+                                .background(selected ? tint : tint.opacity(0.09), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            Text("找到 \(filteredHistoryRuns.count) 条记录")
+                .font(.system(size: 10, weight: .medium)).foregroundStyle(Palette.secondary)
+        }
     }
 }
 
@@ -1278,7 +1490,7 @@ struct SettingsView: View {
                         SettingsRow(icon: "info.circle", title: "关于", value: "Build Monitor 1.0.0")
                     }.glassCard(21).motionAppear(0.12)
 
-                    Text("建议使用 Fine-grained personal access token，仅授予 Metadata: Read-only 和 Actions: Read-only，并只选择需要监控的仓库。Token 不会写入源码或 UserDefaults。")
+                    Text("建议使用 Fine-grained personal access token，并只选择需要监控的仓库。仅监控需要 Metadata: Read-only 与 Actions: Read-only；要从 App 启动、取消或重跑构建，需要将 Actions 提升为 Read and write。Token 不会写入源码或 UserDefaults。")
                         .font(.system(size: 11)).foregroundStyle(Palette.secondary).padding(.horizontal, 4)
                     if let error = store.errorMessage {
                         Text(error).font(.system(size: 12)).foregroundStyle(Palette.danger)
@@ -1369,7 +1581,8 @@ struct TokenConnectionView: View {
                             Text("所需最小权限").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.ink)
                             Text("• Repository access：选择需要监控的仓库")
                             Text("• Metadata：Read-only")
-                            Text("• Actions：Read-only")
+                            Text("• Actions：Read-only（仅监控）")
+                        Text("• Actions：Read and write（启动、取消或重跑构建时需要）")
                         }
                         .font(.system(size: 12)).foregroundStyle(Palette.secondary).padding(14).glassCard(16)
                         Link(destination: URL(string: "https://github.com/settings/personal-access-tokens/new")!) {
