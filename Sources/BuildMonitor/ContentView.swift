@@ -161,8 +161,8 @@ extension View {
 
     func glassCard(_ radius: CGFloat = 22) -> some View {
         self
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(Color.white.opacity(0.38)) )
+            .background(Color.white.opacity(0.88), in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(LinearGradient(colors: [Color.white.opacity(0.28), Color.white.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing))
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).stroke(.white.opacity(0.82), lineWidth: 1))
             .shadow(color: Palette.ink.opacity(0.055), radius: 16, x: 0, y: 7)
     }
@@ -303,89 +303,6 @@ struct InfoNotice: View {
 }
 
 
-// MARK: - Dashboard Scroll Scrubber
-private struct DashboardScrollOffsetKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-private struct DashboardContentHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-
-private struct DashboardScrollScrubber: View {
-    @Binding var progress: CGFloat
-    let topLimit: CGFloat
-    let bottomLimit: CGFloat
-    let onScrub: (CGFloat) -> Void
-    @State private var longPressReady = false
-    @State private var dragStartY: CGFloat = 0
-    @State private var startProgress: CGFloat = 0
-    @State private var isDragging = false
-
-    private var trackHeight: CGFloat { max(80, bottomLimit - topLimit) }
-    private var thumbHeight: CGFloat { max(48, min(76, trackHeight * 0.16)) }
-    private var thumbTravel: CGFloat { max(1, trackHeight - thumbHeight) }
-
-    var body: some View {
-        ZStack(alignment: .top) {
-            Capsule()
-                .fill(Color.white.opacity(0.48))
-                .frame(width: 5, height: trackHeight)
-                .overlay(Capsule().stroke(Color.white.opacity(0.8), lineWidth: 0.7))
-            Capsule()
-                .fill(LinearGradient(colors: [Palette.blue.opacity(0.30), Palette.blue.opacity(0.12)], startPoint: .top, endPoint: .bottom))
-                .frame(width: 3, height: trackHeight)
-            Capsule()
-                .fill(LinearGradient(colors: [Palette.blue, Color(red: 0.38, green: 0.65, blue: 1)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: isDragging ? 6 : 4, height: thumbHeight)
-                .overlay(Capsule().stroke(.white.opacity(0.85), lineWidth: isDragging ? 1.2 : 0.7))
-                .shadow(color: Palette.blue.opacity(isDragging ? 0.32 : 0.12), radius: isDragging ? 9 : 4, y: 2)
-                .offset(y: progress * thumbTravel)
-                .overlay(alignment: .center) {
-                    Circle()
-                        .fill(.white)
-                        .frame(width: isDragging ? 11 : 8, height: isDragging ? 11 : 8)
-                        .overlay(Circle().fill(Palette.blue).padding(2))
-                        .shadow(color: Palette.blue.opacity(0.18), radius: 4)
-                        .offset(y: progress * thumbTravel)
-                }
-        }
-        .frame(width: 28, height: trackHeight)
-        .contentShape(Rectangle())
-        .onLongPressGesture(minimumDuration: 0.32, pressing: { pressing in
-            if !pressing && !isDragging { longPressReady = false }
-        }, perform: {
-            longPressReady = true
-            isDragging = true
-            startProgress = progress
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        })
-        .simultaneousGesture(DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                guard longPressReady || isDragging else { return }
-                if !isDragging {
-                    isDragging = true
-                    startProgress = progress
-                    dragStartY = value.startLocation.y
-                }
-                let delta = value.translation.height / thumbTravel
-                let next = min(1, max(0, startProgress + delta))
-                progress = next
-                onScrub(next)
-            }
-            .onEnded { _ in
-                if isDragging {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                }
-                isDragging = false
-                longPressReady = false
-            })
-        .animation(.spring(response: 0.30, dampingFraction: 0.76), value: isDragging)
-        .accessibilityLabel("长按拖动快速滚动")
-    }
-}
-
 struct DashboardView: View {
     @EnvironmentObject private var store: BuildMonitorStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -436,11 +353,6 @@ struct DashboardView: View {
     private func count(_ status: BuildStatus) -> String {
         String(recentRuns.filter { $0.run.buildStatus == status }.count)
     }
-
-    @State private var dashboardScrollProgress: CGFloat = 0
-    @State private var dashboardScrollOffset: CGFloat = 0
-    @State private var dashboardContentHeight: CGFloat = 0
-    @State private var dashboardViewportHeight: CGFloat = 0
 
     var body: some View {
         ScrollViewReader { scrollProxy in
@@ -543,35 +455,7 @@ struct DashboardView: View {
                 .animation(.spring(response: 0.42, dampingFraction: 0.78), value: recentRuns.map(\.id))
             }
             .coordinateSpace(name: "dashboardScroll")
-            .background(GeometryReader { geo in
-                Color.clear.onAppear { dashboardViewportHeight = geo.size.height }
-                    .onChange(of: geo.size.height) { _, value in dashboardViewportHeight = value }
-            })
-            .onPreferenceChange(DashboardScrollOffsetKey.self) { offset in
-                dashboardScrollOffset = offset
-                let maxOffset = max(1, dashboardContentHeight - dashboardViewportHeight)
-                dashboardScrollProgress = min(1, max(0, -offset / maxOffset))
-            }
-            .onPreferenceChange(DashboardContentHeightKey.self) { dashboardContentHeight = $0 }
-            .overlay(alignment: .trailing) {
-                GeometryReader { geo in
-                    DashboardScrollScrubber(
-                        progress: $dashboardScrollProgress,
-                        topLimit: 116,
-                        bottomLimit: geo.size.height - 118,
-                        onScrub: { value in
-                            let items = filteredRepositories
-                            guard !items.isEmpty else { return }
-                            let index = min(items.count - 1, max(0, Int((value * CGFloat(items.count - 1)).rounded())))
-                            withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.86)) {
-                                scrollProxy.scrollTo(items[index].id, anchor: .top)
-                            }
-                        }
-                    )
-                    .position(x: geo.size.width - 14, y: (116 + geo.size.height - 118) / 2)
-                }
-                .allowsHitTesting(dashboardContentHeight > dashboardViewportHeight + 20 && store.isConnected)
-            }
+
         }
         }
         .toolbar(.hidden, for: .navigationBar)
