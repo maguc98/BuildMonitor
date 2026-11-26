@@ -391,7 +391,9 @@ struct RunDetailView: View {
         downloadingArtifactID = artifact.id
         artifactError = nil
         do {
-            let zipURL = try await store.downloadArtifact(repository: repository.fullName, artifact: artifact) { progress in\n                artifactDownloadProgress = progress\n            }
+            let zipURL = try await store.downloadArtifact(repository: repository.fullName, artifact: artifact) { progress in
+                artifactDownloadProgress = progress
+            }
             downloadingArtifactID = nil
             isExtractingArtifactID = artifact.id
             let folder = try ArtifactArchiveService.extract(zipURL: zipURL, name: artifact.name, id: artifact.id)
