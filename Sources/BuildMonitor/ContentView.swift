@@ -361,7 +361,7 @@ struct DashboardView: View {
                             if store.isLoading { ProgressView().tint(Palette.blue) }
                             else {
                                 Button { Task { await store.refresh() } } label: {
-                                    Image(systemName: "arrow.clockwise").foregroundStyle(Palette.ink).symbolEffect(.rotate, value: store.isLoading)
+                                    Image(systemName: "arrow.clockwise").foregroundStyle(Palette.ink).rotationEffect(.degrees(store.isLoading ? 360 : 0)).animation(store.isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: store.isLoading)
                                 }
                             }
                         }
