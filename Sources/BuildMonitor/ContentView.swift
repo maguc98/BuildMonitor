@@ -11,7 +11,6 @@ struct RootTabView: View {
 
     var body: some View {
         ZStack {
-            AppBackground()
             ZStack {
                 NavigationStack { DashboardView() }
                     .opacity(selectedTab == 0 ? 1 : 0)
@@ -109,8 +108,14 @@ struct AppBackground: View {
     var body: some View {
         ZStack {
             LinearGradient(colors: [Color(red: 0.985, green: 0.985, blue: 1), Color(red: 0.94, green: 0.96, blue: 1), Color(red: 0.965, green: 0.95, blue: 0.99)], startPoint: .topLeading, endPoint: .bottomTrailing)
-            Circle().fill(Palette.blue.opacity(0.07)).frame(width: 260, height: 260).blur(radius: 70).offset(x: 150, y: -260)
-            Circle().fill(Palette.purple.opacity(0.06)).frame(width: 240, height: 240).blur(radius: 65).offset(x: -150, y: 180)
+            Circle()
+                .fill(RadialGradient(colors: [Palette.blue.opacity(0.085), .clear], center: .center, startRadius: 0, endRadius: 132))
+                .frame(width: 264, height: 264)
+                .offset(x: 150, y: -260)
+            Circle()
+                .fill(RadialGradient(colors: [Palette.purple.opacity(0.075), .clear], center: .center, startRadius: 0, endRadius: 122))
+                .frame(width: 244, height: 244)
+                .offset(x: -150, y: 180)
         }.ignoresSafeArea()
     }
 }
@@ -122,14 +127,14 @@ private struct MotionAppearModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .opacity(isVisible || reduceMotion ? 1 : 0)
-            .offset(y: isVisible || reduceMotion ? 0 : 6)
+            .offset(y: isVisible || reduceMotion ? 0 : 7)
+            .scaleEffect(isVisible || reduceMotion ? 1 : 0.992)
             .onAppear {
                 guard !isVisible else { return }
                 if reduceMotion {
                     isVisible = true
                 } else {
-                    withAnimation(.easeOut(duration: 0.22).delay(min(max(0, delay), 0.08))) {
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.84).delay(min(max(0, delay), 0.06))) {
                         isVisible = true
                     }
                 }
@@ -145,10 +150,10 @@ struct AppPressableButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.965 : 1)
-            .opacity(configuration.isPressed ? 0.82 : 1)
+             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.978 : 1)
+            .opacity(configuration.isPressed ? 0.88 : 1)
             .animation(
-                reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.62),
+                reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.78),
                 value: configuration.isPressed
             )
     }
@@ -172,7 +177,7 @@ extension View {
                     .stroke(.white.opacity(0.82), lineWidth: 1)
                     .allowsHitTesting(false)
             }
-            .shadow(color: Palette.ink.opacity(0.055), radius: 16, x: 0, y: 7)
+            .shadow(color: Palette.ink.opacity(0.045), radius: 11, x: 0, y: 5)
     }
 }
 
@@ -188,7 +193,7 @@ struct AppMark: View {
         }
         .frame(width: size, height: size)
         .shadow(color: Palette.blue.opacity(0.22), radius: 12, x: 0, y: 6)
-        .symbolEffect(.pulse, options: .repeating, value: size)
+        .accessibilityHidden(true)
     }
 }
 
@@ -226,59 +231,27 @@ struct BuildElapsedTimer: View {
 
 
 struct StatusGlyph: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\\.accessibilityReduceMotion) private var reduceMotion
     let status: BuildStatus
     var size: CGFloat = 14
 
     var body: some View {
         Group {
             if reduceMotion {
-                staticGlyph
+                glyph
             } else {
-                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: status == .success)) { timeline in
-                    animatedGlyph(at: timeline.date)
-                }
+                glyph.symbolEffect(.bounce, value: status)
             }
         }
         .foregroundStyle(status.color)
         .frame(width: size + 9, height: size + 9)
+        .accessibilityLabel(status.title)
     }
 
-    @ViewBuilder private var staticGlyph: some View {
+    private var glyph: some View {
         Image(systemName: status.symbol)
             .font(.system(size: size, weight: .bold))
-    }
-
-    @ViewBuilder private func animatedGlyph(at date: Date) -> some View {
-        let phase = date.timeIntervalSinceReferenceDate
-        switch status {
-        case .inProgress:
-            ZStack {
-                Circle().stroke(status.color.opacity(0.18), lineWidth: 2)
-                Circle().trim(from: 0, to: 0.30)
-                    .stroke(status.color, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
-                    .rotationEffect(.degrees((phase.truncatingRemainder(dividingBy: 1.0)) * 360))
-            }
-            .frame(width: size + 7, height: size + 7)
-        case .queued:
-            Image(systemName: status.symbol)
-                .font(.system(size: size, weight: .bold))
-                .rotationEffect(.degrees((sin(phase * 2.2) + 1) * 8))
-                .frame(width: size + 7, height: size + 7)
-        case .success:
-            Image(systemName: status.symbol)
-                .font(.system(size: size, weight: .bold))
-                .symbolEffect(.bounce, value: status)
-                .frame(width: size + 7, height: size + 7)
-        case .failed:
-            ZStack {
-                Circle().stroke(status.color.opacity(0.24 + (sin(phase * 3.2) + 1) * 0.10), lineWidth: 1.8)
-                    .scaleEffect(0.94 + (sin(phase * 3.2) + 1) * 0.04)
-                Image(systemName: status.symbol)
-                    .font(.system(size: size, weight: .bold))
-            }
-            .frame(width: size + 7, height: size + 7)
-        }
+            .contentTransition(.symbolEffect(.replace))
     }
 }
 
