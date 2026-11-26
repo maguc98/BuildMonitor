@@ -94,6 +94,22 @@ struct RunDetailView: View {
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: selectedTab)
         }
+        .sheet(isPresented: $showDownloadedZipSheet) {
+            if let shareURL {
+                VStack(spacing: 18) {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 42)).foregroundStyle(Palette.success)
+                    Text("Artifact ZIP 已下载").font(.system(size: 18, weight: .bold))
+                    Text(shareURL.lastPathComponent).font(.system(size: 12)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
+                    ShareLink(item: shareURL) {
+                        Label("保存到文件 / 分享", systemImage: "square.and.arrow.up")
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(maxWidth: .infinity).padding(14)
+                            .background(Palette.blue, in: RoundedRectangle(cornerRadius: 14)).foregroundStyle(.white)
+                    }
+                    Button("完成") { showDownloadedZipSheet = false }.foregroundStyle(Palette.secondary)
+                }.padding(24).presentationDetents([.medium])
+            }
+        }
         .navigationTitle("构建详情")
         .sensoryFeedback(.selection, trigger: selectedTab)
         .navigationBarTitleDisplayMode(.inline)
