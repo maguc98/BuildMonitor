@@ -244,8 +244,29 @@ struct GitHubAPIClient {
         return response.artifacts
     }
 
-    func downloadArtifact(token: String, repository: String, artifactID: Int) async throws -> Data {
-        try await requestData("/repos/\(repository)/actions/artifacts/\(artifactID)/zip", token: token)
+    func downloadArtifact(token: String, repository: String, artifactID: Int, progress: @escaping @MainActor (Double) -> Void) async throws -> Data {
+        guard let url = URL(string: baseURL + "/repos/\(repository)/actions/artifacts/\(artifactID)/zip") else {
+            throw GitHubAPIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else { throw GitHubAPIError.invalidResponse }
+        guard (200...299).contains(http.statusCode) else {
+            if http.statusCode == 401 { throw GitHubAPIError.unauthorized }
+            throw GitHubAPIError.server("Artifact 下载失败（HTTP \(http.statusCode)）。")
+        }
+        let expected = response.expectedContentLength
+        var data = Data()
+        if expected > 0 { data.reserveCapacity(Int(expected)) }
+        for try await byte in bytes {
+            data.append(byte)
+            if expected > 0 { await progress(min(1, Double(data.count) / Double(expected))) }
+        }
+        await progress(1)
+        return data
     }
 
     private func get<T: Decodable>(_ path: String, token: String) async throws -> T {
@@ -571,9 +592,9 @@ final class BuildMonitorStore: ObservableObject {
         return try await (jobs, artifacts)
     }
 
-    func downloadArtifact(repository: String, artifact: WorkflowArtifact) async throws -> URL {
+    func downloadArtifact(repository: String, artifact: WorkflowArtifact, progress: @escaping @MainActor (Double) -> Void) async throws -> URL {
         guard let token else { throw GitHubAPIError.unauthorized }
-        let data = try await api.downloadArtifact(token: token, repository: repository, artifactID: artifact.id)
+        let data = try await api.downloadArtifact(token: token, repository: repository, artifactID: artifact.id, progress: progress)
         let safeName = artifact.name.replacingOccurrences(of: "/", with: "-")
         let destination = FileManager.default.temporaryDirectory.appendingPathComponent("\(safeName)-\(artifact.id).zip")
         try data.write(to: destination, options: .atomic)
