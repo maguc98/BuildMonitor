@@ -484,7 +484,7 @@ final class BuildMonitorStore: ObservableObject {
     }
 
     func refresh() async {
-        guard let token else { return }
+        guard let token, !isLoading else { return }
         isLoading = true
         defer {
             isLoading = false
@@ -510,12 +510,10 @@ final class BuildMonitorStore: ObservableObject {
                 return values
             }
             let newRunsByRepository = Dictionary(uniqueKeysWithValues: results)
-            // Silent background refreshes still animate data changes in-place.
-            // Keep network activity unobtrusive; animate only the UI updates.
-            withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
-                repositories = fetchedRepositories
-                runsByRepository = newRunsByRepository
-            }
+            // Apply synchronized data without animating every repository card.
+            // Small, local value changes keep their own lightweight transitions.
+            repositories = fetchedRepositories
+            runsByRepository = newRunsByRepository
 
             let observedRuns = fetchedRepositories.prefix(40).flatMap { repository in
                 (runsByRepository[repository.fullName] ?? []).map {
@@ -531,7 +529,7 @@ final class BuildMonitorStore: ObservableObject {
         }
     }
 
-    func startPolling(interval: UInt64 = 1) {
+    func startPolling(interval: UInt64 = 60) {
         guard token != nil, pollingTask == nil else { return }
         pollingTask = Task { [weak self] in
             while !Task.isCancelled {
