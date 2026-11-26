@@ -495,7 +495,12 @@ final class BuildMonitorStore: ObservableObject {
             let targets = Array(fetchedRepositories.prefix(40))
             let client = api
             let results = await withTaskGroup(of: (String, [WorkflowRun]).self) { group in
-                for repository in targets {
+                var nextIndex = 0
+                let initialTaskCount = min(8, targets.count)
+
+                for _ in 0..<initialTaskCount {
+                    let repository = targets[nextIndex]
+                    nextIndex += 1
                     group.addTask {
                         do {
                             let runs = try await client.workflowRuns(token: token, repository: repository.fullName)
@@ -505,8 +510,23 @@ final class BuildMonitorStore: ObservableObject {
                         }
                     }
                 }
+
                 var values: [(String, [WorkflowRun])] = []
-                for await value in group { values.append(value) }
+                while let value = await group.next() {
+                    values.append(value)
+                    guard nextIndex < targets.count else { continue }
+
+                    let repository = targets[nextIndex]
+                    nextIndex += 1
+                    group.addTask {
+                        do {
+                            let runs = try await client.workflowRuns(token: token, repository: repository.fullName)
+                            return (repository.fullName, runs)
+                        } catch {
+                            return (repository.fullName, [])
+                        }
+                    }
+                }
                 return values
             }
             let newRunsByRepository = Dictionary(uniqueKeysWithValues: results)
