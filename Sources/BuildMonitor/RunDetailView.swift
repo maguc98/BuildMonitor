@@ -427,7 +427,9 @@ struct RunDetailView: View {
             shareURL = try await store.downloadArtifact(
                 repository: repository.fullName,
                 artifact: artifact
-            )
+            ) { progress in
+                artifactDownloadProgress = progress
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
