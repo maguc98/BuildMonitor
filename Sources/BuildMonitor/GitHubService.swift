@@ -220,6 +220,14 @@ struct GitHubAPIClient {
         )
     }
 
+    func rerunFailedJobs(token: String, repository: String, runID: Int) async throws {
+        _ = try await requestData(
+            "/repos/\(repository)/actions/runs/\(runID)/rerun-failed-jobs",
+            token: token,
+            method: "POST"
+        )
+    }
+
     func jobs(token: String, repository: String, runID: Int) async throws -> [WorkflowJob] {
         let response: WorkflowJobsResponse = try await get(
             "/repos/\(repository)/actions/runs/\(runID)/jobs?per_page=100",
