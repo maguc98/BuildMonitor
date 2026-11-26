@@ -558,6 +558,12 @@ final class BuildMonitorStore: ObservableObject {
         await refresh()
     }
 
+    func rerunFailedJobs(repository: String, runID: Int) async throws {
+        guard let token else { throw GitHubAPIError.unauthorized }
+        try await api.rerunFailedJobs(token: token, repository: repository, runID: runID)
+        await refresh()
+    }
+
     func loadRunDetails(repository: String, runID: Int) async throws -> (jobs: [WorkflowJob], artifacts: [WorkflowArtifact]) {
         guard let token else { throw GitHubAPIError.unauthorized }
         async let jobs = api.jobs(token: token, repository: repository, runID: runID)
