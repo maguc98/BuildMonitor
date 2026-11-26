@@ -760,7 +760,7 @@ private struct RepositoryCard: View {
                 HStack {
                     Text("\(displayRun.headBranch) · \(displayRun.shortSHA)")
                     Spacer()
-                    Text(RelativeDateTimeFormatter.localized(run.updatedAt))
+                    Text(RelativeDateTimeFormatter.localized(displayRun.updatedAt))
                 }.font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
                 BuildElapsedTimer(createdAt: displayRun.createdAt, updatedAt: displayRun.updatedAt, runStartedAt: displayRun.runStartedAt, status: displayRun.status, label: displayRun.status == "queued" || displayRun.status == "waiting" || displayRun.status == "requested" || displayRun.status == "pending" ? "排队时间" : (displayRun.status == "in_progress" ? "总构建耗时" : "最终耗时"))
             } else {
