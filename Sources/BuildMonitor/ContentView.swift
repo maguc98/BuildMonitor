@@ -315,8 +315,12 @@ struct DashboardView: View {
                 > (store.latestRun(for: rhs.fullName)?.updatedAt ?? "")
         }
     }
+    private var statusCounts: [String: Int] {
+        Dictionary(grouping: recentRuns, by: { $0.run.buildStatus.rawValue }).mapValues(\.count)
+    }
+
     private func count(_ status: BuildStatus) -> String {
-        String(recentRuns.filter { $0.run.buildStatus == status }.count)
+        String(statusCounts[status.rawValue, default: 0])
     }
 
     var body: some View {
@@ -407,7 +411,7 @@ struct DashboardView: View {
                 }
                 .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 28)
                 .motionAppear(0.02)
-                .animation(.spring(response: 0.42, dampingFraction: 0.78), value: store.visibleRepositories.count)
+
 
             }
 
