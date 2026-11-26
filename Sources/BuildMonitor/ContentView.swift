@@ -3,6 +3,7 @@ import SwiftUI
 struct RootTabView: View {
     @StateObject private var store = BuildMonitorStore()
     @State private var selectedTab = 0
+    @Namespace private var tabSelection
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
 
@@ -90,6 +91,14 @@ struct RootTabView: View {
                     .foregroundStyle(selectedTab == index ? Palette.blue : Palette.secondary)
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
+                    .background {
+                        if selectedTab == index {
+                            Capsule()
+                                .fill(Palette.blue.opacity(0.095))
+                                .matchedGeometryEffect(id: "tab-selection", in: tabSelection)
+                        }
+                    }
+                    .padding(.horizontal, 5)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -409,8 +418,8 @@ struct DashboardView: View {
                                     .id(repository.id)
                                     .motionAppear(0)
                                     .transition(.asymmetric(
-                                        insertion: .opacity.combined(with: .move(edge: .bottom)).combined(with: .scale(scale: 0.975)),
-                                        removal: .opacity.combined(with: .scale(scale: 0.94))
+                                        insertion: .move(edge: .bottom).combined(with: .scale(scale: 0.975)),
+                                        removal: .move(edge: .top).combined(with: .scale(scale: 0.985))
                                     ))
                                 }
                             }
