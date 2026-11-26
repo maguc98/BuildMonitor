@@ -150,7 +150,7 @@ struct AppPressableButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.978 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.978 : 1)
             .opacity(configuration.isPressed ? 0.88 : 1)
             .animation(
                 reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.78),
@@ -231,7 +231,7 @@ struct BuildElapsedTimer: View {
 
 
 struct StatusGlyph: View {
-    @Environment(\\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let status: BuildStatus
     var size: CGFloat = 14
 
