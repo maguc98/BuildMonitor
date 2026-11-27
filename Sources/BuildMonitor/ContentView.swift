@@ -1481,10 +1481,21 @@ struct NotificationsView: View {
                     .glassCard(18)
                     .motionAppear(0.1)
 
-                    Text("App 前台约每 60 秒同步一次。后台提醒受 iOS 后台刷新策略限制，系统可能延迟执行。")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Palette.secondary)
-                        .padding(.horizontal, 4)
+                    if RuntimeEnvironment.isLiveContainer {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "info.circle.fill").foregroundStyle(Palette.blue)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("LiveContainer 专项模式").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink)
+                                Text("已自动关闭 BGTaskScheduler 后台任务，避免宿主与 Guest 的任务注册不匹配导致崩溃。App 在前台时仍每 60 秒同步；后台刷新不保证运行。若本地通知未弹出，请在 LiveContainer 为此 App 开启「Fix Local Notification」。")
+                                    .font(.system(size: 11)).foregroundStyle(Palette.secondary)
+                            }
+                        }.padding(14).glassCard(16)
+                    } else {
+                        Text("App 前台约每 60 秒同步一次。后台提醒受 iOS 后台刷新策略限制，系统可能延迟执行。")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Palette.secondary)
+                            .padding(.horizontal, 4)
+                    }
                 }.padding(18)
             }
         }
