@@ -711,10 +711,23 @@ enum RunNotificationTracker {
     }
 }
 
+enum RuntimeEnvironment {
+    /// LiveContainer launches guest apps inside its host process and may not
+    /// provide a guest-compatible BGTaskScheduler registration/launch lifecycle.
+    static var isLiveContainer: Bool {
+        let environment = ProcessInfo.processInfo.environment
+        return environment["LC_HOME_PATH"] != nil
+            || environment["LC_GLOBAL_TWEAKS_FOLDER"] != nil
+            || environment["LC_TWEAKS_FOLDER"] != nil
+            || (Bundle.main.bundleIdentifier?.lowercased().contains("livecontainer") == true)
+    }
+}
+
 enum BackgroundRefreshScheduler {
     static let identifier = "com.maguc98.BuildMonitor.refresh"
 
     static func register() {
+        guard !RuntimeEnvironment.isLiveContainer else { return }
         BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: nil) { task in
             guard let refreshTask = task as? BGAppRefreshTask else {
                 task.setTaskCompleted(success: false)
@@ -725,7 +738,10 @@ enum BackgroundRefreshScheduler {
     }
 
     static func schedule() {
-        guard TokenKeychain.read() != nil,
+        // LiveContainer guests should not submit BGTaskScheduler requests:
+        // host/guest plist and launch-handler validation can mismatch.
+        guard !RuntimeEnvironment.isLiveContainer,
+              TokenKeychain.read() != nil,
               UserDefaults.standard.bool(forKey: BuildNotificationManager.enabledKey) else { return }
 
         let request = BGAppRefreshTaskRequest(identifier: identifier)
